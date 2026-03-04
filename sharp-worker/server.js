@@ -1,6 +1,6 @@
 const express = require('express');
-const sharp   = require('sharp');
-const app     = express();
+const sharp = require('sharp');
+const app = express();
 
 app.use(express.json({ limit: '100mb' }));
 
@@ -24,13 +24,14 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 // Body: { base_image_b64, svg_overlay_b64, width?, height? }
 // Returns: PNG binary
 app.post('/composite', checkAuth, async (req, res) => {
+  console.log(`[sharp-worker] Received composite request. Base size: ${req.body?.base_image_b64?.length || 0} bytes`);
   try {
     const { base_image_b64, svg_overlay_b64, width = 1080, height = 1350 } = req.body;
 
     if (!base_image_b64) return res.status(400).json({ error: 'Missing base_image_b64' });
     if (!svg_overlay_b64) return res.status(400).json({ error: 'Missing svg_overlay_b64' });
 
-    const bgBuffer  = Buffer.from(base_image_b64,  'base64');
+    const bgBuffer = Buffer.from(base_image_b64, 'base64');
     const svgBuffer = Buffer.from(svg_overlay_b64, 'base64'); // raw SVG XML bytes
 
     const finalPng = await sharp(bgBuffer)
