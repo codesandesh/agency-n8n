@@ -4,6 +4,7 @@ volumes:
   db_storage:
   n8n_storage:
   redis_storage:
+  sharp_worker_nm:
 
 services:
   postgres:
@@ -38,6 +39,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  sharp-worker:
+    build: ./sharp-worker
+    container_name: sharp-worker
+    restart: always
+    environment:
+      - SHARP_WORKER_SECRET=${SHARP_WORKER_SECRET}
+    volumes:
+      - sharp_worker_nm:/app/node_modules
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   n8n:
     image: docker.n8n.io/n8nio/n8n
@@ -76,11 +91,14 @@ services:
       - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY}
       - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
       - WAVESPEED_API_KEY=${WAVESPEED_API_KEY}
+      - SHARP_WORKER_URL=http://sharp-worker:3000/composite
+      - SHARP_WORKER_SECRET=${SHARP_WORKER_SECRET}
     ports:
       - "5679:5678"
     links:
       - postgres
       - redis
+      - sharp-worker
     volumes:
       - n8n_storage:/home/node/.n8n
     depends_on:
@@ -120,13 +138,18 @@ services:
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SHARP_WORKER_URL=http://sharp-worker:3000/composite
+      - SHARP_WORKER_SECRET=${SHARP_WORKER_SECRET}
     links:
       - postgres
       - redis
+      - sharp-worker
     volumes:
       - n8n_storage:/home/node/.n8n
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      sharp-worker:
         condition: service_healthy

@@ -1,6 +1,6 @@
 {
-    "id": 1,
-    "name": "Hyperscaler - Full Autonomous Branding Factory v4 FIXED",
+    "id": 2,
+    "name": "Hyperscaler - Full Autonomous Branding Factory v5.1 FIXED PIPELINE",
     "nodes": [
         {
             "parameters": {
@@ -24,7 +24,7 @@
         },
         {
             "parameters": {
-                "jsCode": "const subreddits = [\n  'AI_Agents', 'LLMDevs', 'LocalLLaMA', 'agents',\n  'AutoGPT', 'LangChain', 'crewAI', 'MachineLearning',\n  'artificial', 'singularity', 'Futurology'\n];\n// Shuffle subreddits to ensure variety in each run\nconst shuffled = subreddits.sort(() => Math.random() - 0.5);\nreturn shuffled.map(s => ({ json: { subreddit: s } }));"
+                "jsCode": "const subreddits = [\n  'AI_Agents', 'LLMDevs', 'LocalLLaMA', 'agents',\n  'AutoGPT', 'LangChain', 'crewAI', 'MachineLearning',\n  'artificial', 'singularity', 'Futurology'\n];\nconst shuffled = subreddits.sort(() => Math.random() - 0.5);\nreturn shuffled.map(s => ({ json: { subreddit: s } }));"
             },
             "id": "node-list-subs",
             "name": "List Subreddits",
@@ -44,7 +44,7 @@
                     "parameters": [
                         {
                             "name": "User-Agent",
-                            "value": "Mozilla/5.0 (compatible; Hyperscaler ManBot/4.0)"
+                            "value": "Mozilla/5.0 (compatible; Hyperscaler ManBot/5.0)"
                         }
                     ]
                 },
@@ -72,7 +72,7 @@
                     "parameters": [
                         {
                             "name": "User-Agent",
-                            "value": "Mozilla/5.0 (compatible; Hyperscaler ManBot/4.0)"
+                            "value": "Mozilla/5.0 (compatible; Hyperscaler ManBot/5.0)"
                         }
                     ]
                 },
@@ -105,7 +105,7 @@
         },
         {
             "parameters": {
-                "jsCode": "const items = $input.all();\nconst seen = new Set();\nconst results = [];\nconst now = Date.now() / 1000;\nconst cutoff = now - (48 * 3600);\n\nconst staticData = $getWorkflowStaticData('global');\nstaticData.processedPostIds = staticData.processedPostIds || [];\nstaticData.recentTopics = staticData.recentTopics || [];\nconst processedIds = new Set(staticData.processedPostIds);\n\nconst AGENTIC_KEYWORDS = [\n  'agent', 'agentic', 'autonomous', 'llm', 'gpt', 'claude', 'gemini',\n  'langchain', 'crewai', 'autogpt', 'langgraph', 'workflow', 'ai tool',\n  'ai model', 'openai', 'anthropic', 'multi-agent', 'tool use',\n  'function call', 'reasoning', 'planning', 'ai assistant'\n];\n\nfor (const item of items) {\n  const children = item.json?.data?.children || [];\n  for (const post of children) {\n    const d = post.data;\n    if (!d || seen.has(d.id) || processedIds.has(d.id)) continue;\n    if (d.created_utc < cutoff) continue;\n    if (d.score < 2) continue;\n    \n    const title = d.title.toLowerCase();\n    const text = (d.title + ' ' + (d.selftext || '')).toLowerCase();\n    \n    // Topic Diversity Check\n    let varietyPenalty = 0;\n    staticData.recentTopics.forEach(topic => {\n      if (title.includes(topic.toLowerCase())) varietyPenalty += 10; // Increased penalty\n    });\n\n    const isRelevant = AGENTIC_KEYWORDS.some(k => text.includes(k));\n    if (!isRelevant) continue;\n    \n    seen.add(d.id);\n    \n    // Add a RANDOM FACTOR to the score for variety across runs\n    // This ensures that even if static data resets, we don't always pick the same one\n    const randomFactor = Math.random() * 5;\n\n    results.push({\n      json: {\n        post_id: d.id,\n        title: d.title,\n        text: (d.selftext || '').substring(0, 1500),\n        subreddit: d.subreddit,\n        reddit_url: 'https://reddit.com' + d.permalink,\n        source_url: d.url || 'https://reddit.com' + d.permalink,\n        score: (d.score - varietyPenalty) + randomFactor,\n        original_score: d.score,\n        date: new Date(d.created_utc * 1000).toISOString()\n      }\n    });\n  }\n}\n\n// SHUFFLE BEFORE SORTING to break ties randomly\nconst shuffledResults = results.sort(() => Math.random() - 0.5);\n\n// Take top 10 from the shuffled/weighted results\nconst selected = shuffledResults\n  .sort((a, b) => b.json.score - a.json.score)\n  .slice(0, 10);\n\nfor (const item of selected) {\n  staticData.processedPostIds.push(item.json.post_id);\n  const words = item.json.title.split(' ').filter(w => w.length > 5).slice(0, 3); \n  staticData.recentTopics.push(...words);\n}\n\nif (staticData.processedPostIds.length > 2000) {\n  staticData.processedPostIds = staticData.processedPostIds.slice(-2000);\n}\nif (staticData.recentTopics.length > 50) {\n  staticData.recentTopics = staticData.recentTopics.slice(-50);\n}\n\nreturn selected;"
+                "jsCode": "const items = $input.all();\nconst seen = new Set();\nconst results = [];\nconst now = Date.now() / 1000;\nconst cutoff = now - (48 * 3600);\n\nconst staticData = $getWorkflowStaticData('global');\nstaticData.processedPostIds = staticData.processedPostIds || [];\nstaticData.recentTopics = staticData.recentTopics || [];\nconst processedIds = new Set(staticData.processedPostIds);\n\nconst AGENTIC_KEYWORDS = [\n  'agent', 'agentic', 'autonomous', 'llm', 'gpt', 'claude', 'gemini',\n  'langchain', 'crewai', 'autogpt', 'langgraph', 'workflow', 'ai tool',\n  'ai model', 'openai', 'anthropic', 'multi-agent', 'tool use',\n  'function call', 'reasoning', 'planning', 'ai assistant'\n];\n\nfor (const item of items) {\n  const children = item.json?.data?.children || [];\n  for (const post of children) {\n    const d = post.data;\n    if (!d || seen.has(d.id) || processedIds.has(d.id)) continue;\n    if (d.created_utc < cutoff) continue;\n    if (d.score < 2) continue;\n    const title = d.title.toLowerCase();\n    const text = (d.title + ' ' + (d.selftext || '')).toLowerCase();\n    let varietyPenalty = 0;\n    staticData.recentTopics.forEach(topic => {\n      if (title.includes(topic.toLowerCase())) varietyPenalty += 10;\n    });\n    const isRelevant = AGENTIC_KEYWORDS.some(k => text.includes(k));\n    if (!isRelevant) continue;\n    seen.add(d.id);\n    const randomFactor = Math.random() * 5;\n    results.push({\n      json: {\n        post_id: d.id,\n        title: d.title,\n        text: (d.selftext || '').substring(0, 1500),\n        subreddit: d.subreddit,\n        reddit_url: 'https://reddit.com' + d.permalink,\n        source_url: d.url || 'https://reddit.com' + d.permalink,\n        score: (d.score - varietyPenalty) + randomFactor,\n        original_score: d.score,\n        date: new Date(d.created_utc * 1000).toISOString()\n      }\n    });\n  }\n}\n\nconst shuffledResults = results.sort(() => Math.random() - 0.5);\nconst selected = shuffledResults.sort((a, b) => b.json.score - a.json.score).slice(0, 10);\n\nfor (const item of selected) {\n  staticData.processedPostIds.push(item.json.post_id);\n  const words = item.json.title.split(' ').filter(w => w.length > 5).slice(0, 3);\n  staticData.recentTopics.push(...words);\n}\n\nif (staticData.processedPostIds.length > 2000) staticData.processedPostIds = staticData.processedPostIds.slice(-2000);\nif (staticData.recentTopics.length > 50) staticData.recentTopics = staticData.recentTopics.slice(-50);\n\nreturn selected;"
             },
             "id": "node-filter-dedupe",
             "name": "Filter Dedupe and Rank",
@@ -115,6 +115,52 @@
                 280,
                 300
             ]
+        },
+        {
+            "id": "has-article-text-001",
+            "name": "Has Article Text?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                390,
+                300
+            ],
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{ $json.text }}",
+                            "operation": "isNotEmpty"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fetch-article-content-001",
+            "name": "Fetch Article Content",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                560,
+                440
+            ],
+            "parameters": {
+                "jsCode": "const post = $input.item.json;\nconst firecrawlKey = $env.FIRECRAWL_API_KEY;\nconst skipPatterns = ['i.redd.it', '/gallery/', 'reddit.com/r/'];\nconst shouldSkip = !post.source_url || skipPatterns.some(p => post.source_url.includes(p));\nlet articleText = '';\nif (!shouldSkip) {\n  try {\n    const res = await fetch('https://api.firecrawl.dev/v1/scrape', {\n      method: 'POST',\n      headers: { 'Authorization': `Bearer ${firecrawlKey}`, 'Content-Type': 'application/json' },\n      body: JSON.stringify({ url: post.source_url, formats: ['markdown'], onlyMainContent: true })\n    });\n    const data = await res.json();\n    const raw = data?.data?.markdown || data?.data?.content || '';\n    articleText = raw.substring(0, 3000);\n  } catch (e) { articleText = ''; }\n}\nreturn [{ json: { ...post, text: articleText } }];"
+            }
+        },
+        {
+            "id": "sanitize-post-text-001",
+            "name": "Sanitize Post Text",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                740,
+                300
+            ],
+            "parameters": {
+                "jsCode": "const sanitize = (val) => {\n  if (val == null) return '';\n  return String(val).replace(/\\\\/g, '').replace(/\"/g, \"'\").replace(/\\n/g, ' ').replace(/\\r/g, '').replace(/\\t/g, ' ').replace(/[\\x00-\\x1F\\x7F]/g, '');\n};\nreturn [{\n  json: {\n    ...$input.item.json,\n    title: sanitize($input.item.json.title),\n    text: sanitize($input.item.json.text),\n    source_url: sanitize($input.item.json.source_url),\n    subreddit: sanitize($input.item.json.subreddit),\n    reddit_url: sanitize($input.item.json.reddit_url),\n    date: sanitize($input.item.json.date)\n  }\n}];"
+            }
         },
         {
             "parameters": {
@@ -135,7 +181,7 @@
                 },
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"You are a Lead Graphic Designer for HYPERSCALER. Your job is to analyze tech news and generate a hyper-realistic, cinematic news photograph. DO NOT generate diagrams, abstract glass plates, or illustrations of 'layers'.\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n🎯 MASTER VISUAL SYSTEM — PROFESSIONAL NEWS CARD\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\nSTEP 1 — NEWS ANALYSIS\\nAnalyze for core subject (Person/Company) and key keywords.\\n\\nTitle: {{ $json.title }}\\nText: {{ $json.text }}\\nScore: {{ $json.original_score }}\\n\\nSTEP 2 — VISUAL DIRECTION (THE COMPOSITE RESULT)\\nGenerate a single prompt for Seedream-v4 that describes the FINAL result. DO NOT use the word 'layer'.\\n- FINAL SCENE: A detailed cinematic photograph of {{ $json.title }} in a professional environment. High-fidelity textures, 8K detail, RED cinema camera style, anamorphic lens distortion.\\n- INTEGRATED SUBJECT: The main person/object centered in the upper 60% with a cyan (#00D4FF) rim light and backlit halo.\\n- THE CARD OVERLAY: The bottom 60% of the image is seamlessly darkened by a heavy black gradient to make text pop.\\n- BRANDING & TEXT: A white 1px divider line and the name — HYPERSCALER — sitting above the headline. The headline '{{ $json.title.toUpperCase() }}' is rendered in thick Montserrat Black 900 typography. Words found in [{{ $json.title.toUpperCase() }}] relating to nouns/numbers are Electric Cyan (#00D4FF), others are white.\\n\\nReturn ONLY JSON structure:\\n{\\n  \\\"headline\\\": \\\"{{ $json.title.toUpperCase() }}\\\",\\n  \\\"headline_highlights\\\": [\\\"Key words to be CYAN\\\"],\\n  \\\"summary\\\": \\\"Concise professional summary.\\\",\\n  \\\"full_article\\\": \\\"Technical analysis.\\\",\\n  \\\"image_search_query\\\": \\\"{{ $json.title }} portrait news photo\\\",\\n  \\\"visual_prompt\\\": \\\"[HYPER-REALISTIC NEWS PHOTO]: Cinematic photograph of... [Subject Description]... with cyan backlight, heavy bottom black gradient, white branding divider, and Montserrat Black 900 typography integrated. NO DIAGRAMS, NO GLASS PLATES, NO ABSTRACT LAYERS.\\\",\\n  \\\"linkedin\\\": \\\"LinkedIn text (no emojis)\\\",\\n  \\\"facebook\\\": \\\"Facebook text (no emojis)\\\",\\n  \\\"source_url\\\": \\\"{{ $json.source_url }}\\\",\\n  \\\"subreddit\\\": \\\"{{ $json.subreddit }}\\\",\\n  \\\"reddit_url\\\": \\\"{{ $json.reddit_url }}\\\",\\n  \\\"date\\\": \\\"{{ $json.date }}\\\",\\n  \\\"confidence\\\": 8\\n}\"\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"maxOutputTokens\": 8192,\n    \"temperature\": 0.7\n  }\n}"
+                "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"You are a Lead Editor for HYPERSCALER, an AI news brand. Analyze this post and return structured JSON.\\n\\nTitle: {{ $json.title }}\\nText: {{ $json.text }}\\nScore: {{ $json.original_score }}\\n\\nRULES:\\n- headline: ALL CAPS, max 10 words, punchy news headline\\n- headline_highlights: Array of 2-4 words/phrases from the headline that should be CYAN (#00D4FF). Pick key nouns, names, numbers.\\n- summary: 1-2 sentence professional summary, no emojis\\n- full_article: 3-4 paragraph technical analysis, no emojis\\n- image_prompt: A prompt for generating a PHOTO-REALISTIC cinematic background image. IMPORTANT: Describe ONLY the background scene with the specific subjects (people/objects) and setting mentioned in the news. DO NOT use generic templates. Focus on the core 'Hero Subject'. NO TEXT, NO HEADLINES, NO LOGOS, NO WORDS in the image.\\n- image_search_query: 4-6 word search query to find a real press photo of the core subject\\n- linkedin: Professional LinkedIn post text, no emojis\\n- facebook: Casual Facebook post text, no emojis\\n- confidence: Integer 1-10\\n\\nReturn ONLY valid JSON, no markdown:\\n{\\n  \\\"headline\\\": \\\"HEADLINE HERE IN CAPS\\\",\\n  \\\"headline_highlights\\\": [\\\"WORD1\\\", \\\"WORD2\\\"],\\n  \\\"summary\\\": \\\"...\\\",\\n  \\\"full_article\\\": \\\"...\\\",\\n  \\\"image_prompt\\\": \\\"PHOTO ONLY - specify people/objects from news\\\",\\n  \\\"image_search_query\\\": \\\"...\\\",\\n  \\\"linkedin\\\": \\\"...\\\",\\n  \\\"facebook\\\": \\\"...\\\",\\n  \\\"source_url\\\": \\\"{{ $json.source_url }}\\\",\\n  \\\"subreddit\\\": \\\"{{ $json.subreddit }}\\\",\\n  \\\"reddit_url\\\": \\\"{{ $json.reddit_url }}\\\",\\n  \\\"date\\\": \\\"{{ $json.date }}\\\",\\n  \\\"confidence\\\": 8\\n}\"\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"maxOutputTokens\": 4096,\n    \"temperature\": 0.6\n  }\n}"
             },
             "id": "node-claude-analysis",
             "name": "Gemini Analysis",
@@ -148,7 +194,7 @@
         },
         {
             "parameters": {
-                "jsCode": "try {\n  const raw = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  const cleaned = raw\n    .replace(/```json\\n?/gi, '')\n    .replace(/```\\n?/gi, '')\n    .trim();\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (!match) throw new Error('No JSON found in Gemini response');\n  const parsed = JSON.parse(match[0]);\n  if (!parsed.headline) throw new Error('Missing headline field');\n  return [{ json: parsed }];\n} catch(e) {\n  console.error('Parse error:', e.message);\n  return [{ json: { _parse_error: e.message, _raw: $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text?.substring(0, 2000) } }];\n}"
+                "jsCode": "try {\n  const raw = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  const cleaned = raw.replace(/```json\\n?/gi, '').replace(/```\\n?/gi, '').trim();\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (!match) throw new Error('No JSON found in Gemini response');\n  const parsed = JSON.parse(match[0]);\n  if (!parsed.headline) throw new Error('Missing headline field');\n  return [{ json: parsed }];\n} catch(e) {\n  return [{ json: { _parse_error: e.message, _raw: $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text?.substring(0, 2000) } }];\n}"
             },
             "id": "node-parse-claude",
             "name": "Parse Gemini Response",
@@ -228,7 +274,7 @@
         },
         {
             "parameters": {
-                "jsCode": "// Merge Tavily image results with Claude analysis data\n// Claude data is retrieved from the Confidence Gate node which holds the parsed+validated data\nconst tavilyResult = $input.item.json;\nconst images = tavilyResult.images || [];\n\n// Filter: prefer JPG/PNG, avoid generic/logo images\nconst validImages = images.filter(url =>\n  typeof url === 'string' &&\n  (url.endsWith('.jpg') || url.endsWith('.jpeg') || url.endsWith('.png')) &&\n  !url.includes('logo') &&\n  !url.includes('icon') &&\n  !url.includes('favicon') &&\n  !url.includes('thumb') &&\n  !url.includes('.svg')\n);\n\n// SHUFFLE for true variety across runs\n// This ensures that even for the same search results, we pick different images\nconst shuffledImages = validImages.sort(() => Math.random() - 0.5);\nconst goodImage = shuffledImages.length > 0 ? shuffledImages[0] : null;\n\n// Pull the Claude-parsed data from the Confidence Gate node\nconst claudeData = $('Confidence Gate').item.json;\n\nreturn [{\n  json: {\n    ...claudeData,\n    press_image_url: goodImage,\n    all_reference_images: shuffledImages.slice(0, 5), // Keep up to 5 for multi-ref\n    has_press_image: !!goodImage\n  }\n}];"
+                "jsCode": "const tavilyResult = $input.item.json;\nconst images = tavilyResult.images || [];\nconst validImages = images.filter(url =>\n  typeof url === 'string' &&\n  (url.endsWith('.jpg') || url.endsWith('.jpeg') || url.endsWith('.png')) &&\n  !url.includes('logo') && !url.includes('icon') && !url.includes('favicon') &&\n  !url.includes('thumb') && !url.includes('.svg')\n);\nconst shuffledImages = validImages.sort(() => Math.random() - 0.5);\nconst goodImage = shuffledImages.length > 0 ? shuffledImages[0] : null;\nconst claudeData = $('Confidence Gate').item.json;\nreturn [{\n  json: {\n    ...claudeData,\n    press_image_url: goodImage,\n    all_reference_images: shuffledImages.slice(0, 5),\n    has_press_image: !!goodImage\n  }\n}];"
             },
             "id": "node-merge-tavily",
             "name": "Merge Image Data",
@@ -256,21 +302,21 @@
             "type": "n8n-nodes-base.if",
             "typeVersion": 1,
             "position": [
-                1820,
+                1800,
                 100
             ]
         },
         {
             "parameters": {
-                "jsCode": "const json = $input.item.json;\nconst urls = json.all_reference_images || [];\nconst base64Images = [];\n\nfor (const url of urls.slice(0, 5)) {\n  try {\n    const response = await fetch(url);\n    const arrayBuffer = await response.arrayBuffer();\n    const base64 = Buffer.from(arrayBuffer).toString('base64');\n    base64Images.push(base64);\n  } catch (e) {\n    console.error(`Failed to fetch ${url}:`, e.message);\n  }\n}\n\nreturn {\n  json: {\n    ...json,\n    reference_base64_images: base64Images\n  }\n};"
+                "jsCode": "const json = $input.item.json;\nconst urls = json.all_reference_images || [];\nconst base64Images = [];\nfor (const url of urls.slice(0, 5)) {\n  try {\n    const response = await fetch(url);\n    const arrayBuffer = await response.arrayBuffer();\n    const base64 = Buffer.from(arrayBuffer).toString('base64');\n    base64Images.push(base64);\n  } catch (e) {}\n}\nreturn { json: { ...json, reference_base64_images: base64Images } };"
             },
             "id": "node-download-refs",
             "name": "Download Multi-References",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                2040,
-                20
+                2000,
+                0
             ]
         },
         {
@@ -292,20 +338,20 @@
                 },
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={{ (function() {\n  const json = $input.item.json;\n  const images = json.reference_base64_images || [];\n  const parts = [\n    {\n      \"text\": `You are a professional news graphic designer. Refine the visual prompt for Seedream-v4 to generate a hyper-realistic, high-end News Card. \\n\\nCRITICAL: DO NOT generate diagrams, glass plates, layered boxes, or abstract geometric shapes. This MUST be a single, cohesive cinematic photograph.\\n\\nNEWS SUMMARY: ${json.summary}\\nHEADLINE: ${json.headline}\\nHIGHLIGHTS: ${json.headline_highlights.join(', ')}\\n\\nMASTER COMPOSITION RULES:\\n1. THE PHOTO: Use reference images to build a detailed cinematic photograph of the subject. Position: CENTER FRAME, upper 60% of canvas. Size: 60-75% height. \\n2. LIGHTING: RED cinema camera style, anamorphic lens distortion, cinematic rim light (#00D4FF glow).\\n3. THE CARD SYSTEM: The bottom 60% of the photograph must be seamlessly darkened by a heavy black gradient.\\n4. BRANDING: A thin 1px white horizontal divider line centered above the brand name '— HYPERSCALER —'.\\n5. TYPOGRAPHY: Render '${json.headline}' in Montserrat Black 900, ALL CAPS. PURE WHITE text, with words found in [${json.headline_highlights.join(', ')}] rendered in ELECTRIC CYAN (#00D4FF).\\n\\nCURRENT PROMPT: ${json.visual_prompt}`\n    }\n  ];\n  \n  images.forEach(b64 => {\n    parts.push({ \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": b64 } });\n  });\n\n  return JSON.stringify({\n    \"contents\": [{ \"parts\": parts }],\n    \"generationConfig\": { \"maxOutputTokens\": 1024, \"temperature\": 0.4 }\n  });\n})() }}"
+                "jsonBody": "={{ (function() {\n  const json = $input.item.json;\n  const images = json.reference_base64_images || [];\n  const parts = [\n    {\n      \"text\": `You are a professional news graphic designer. Refine the visual prompt for Seedream-v4 based on news context and reference photos. \\n\\nCRITICAL RULE: Return ONLY the raw visual prompt text. NO conversational filler, NO 'Here is the prompt', NO Markdown headers like '**VISUAL PROMPT:**'. Just the prompt string itself.\\n\\nDESCRIBE THE SCENE: Focus on the specific person or object from the news. Describe lighting, textures, and a relevant setting. Positioning: Center frame, upper 60%.\\n\\nNEWS HEADLINE: ${json.headline}\\nNEWS SUMMARY: ${json.summary}`\n    }\n  ];\n  images.forEach(b64 => { parts.push({ \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": b64 } }); });\n  return JSON.stringify({ \"contents\": [{ \"parts\": parts }], \"generationConfig\": { \"maxOutputTokens\": 4096, \"temperature\": 0.4 } });\n})() }}"
             },
             "id": "node-gemini-visual-refine",
             "name": "Gemini Visual Designer",
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.1,
             "position": [
-                2250,
-                20
+                2220,
+                0
             ]
         },
         {
             "parameters": {
-                "jsCode": "// HYPERSCALER: Finalize cinematic prompt from Gemini Visual Designer\nconst json = $input.item.json;\nlet refinedPrompt = json.visual_prompt;\n\n// Try to get refined prompt if Gemini Visual Designer was executed\ntry {\n  const geminiDesigner = $('Gemini Visual Designer');\n  if (geminiDesigner && geminiDesigner.item) {\n    const designerOutput = geminiDesigner.item.json;\n    refinedPrompt = designerOutput.candidates?.[0]?.content?.parts?.[0]?.text || refinedPrompt;\n  }\n} catch (e) {\n  // Node was likely skipped, fall back to initial visual_prompt\n}\n\nconst refs = json.reference_base64_images || [];\n\n// Final payload for WaveSpeed\nconst body = {\n  prompt: refinedPrompt.replace(/[\\r\\n]+/g, \" \").trim(),\n  aspect_ratio: \"4:5\",\n  output_format: \"png\",\n  enable_sync_mode: true,\n  image: refs[0] || json.press_image_url,\n  reference_images: refs\n};\n\nreturn {\n  json: {\n    wavespeed_payload: body,\n    ...json,\n    final_visual_prompt: refinedPrompt\n  }\n};"
+                "jsCode": "const json = $input.item.json;\nlet prompt = json.image_prompt;\ntry {\n  const res = $('Gemini Visual Designer').item.json;\n  let raw = res.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  // Strip Markdown headers and conversational crutch\n  if (raw.includes('**VISUAL PROMPT:**')) raw = raw.split('**VISUAL PROMPT:**')[1];\n  else if (raw.includes('VISUAL PROMPT:')) raw = raw.split('VISUAL PROMPT:')[1];\n  raw = raw.replace(/^(Here's|This is|I have refined|Designed as).*?[:\\n]/si, '');\n  raw = raw.replace(/\\*\\*/g, '').trim();\n  if (raw) prompt = raw;\n} catch (e) {}\nreturn [{\n  json: {\n    ...json,\n    wavespeed_payload: {\n      prompt: prompt.replace(/\\\\n/g, ' ').replace(/\"/g, \"'\") + \" -- NO TEXT, NO LOGOS, cinestill 800t, high fidelity news photo\",\n      aspect_ratio: '4:5',\n      output_format: 'png',\n      enable_sync_mode: true,\n      image: json.reference_base64_images?.[0] || json.press_image_url,\n      reference_images: json.reference_base64_images || []\n    }\n  }\n}];"
             },
             "id": "node-prep-wavespeed",
             "name": "Prep WaveSpeed",
@@ -313,7 +359,7 @@
             "typeVersion": 2,
             "position": [
                 2100,
-                110
+                200
             ]
         },
         {
@@ -336,7 +382,7 @@
                 "sendBody": true,
                 "specifyBody": "json",
                 "jsonBody": "={{ JSON.stringify($json.wavespeed_payload) }}",
-                "responseFormat": "file"
+                "responseFormat": "json"
             },
             "id": "node-wavespeed-generate",
             "name": "WaveSpeed Seedream",
@@ -344,46 +390,46 @@
             "typeVersion": 4.1,
             "position": [
                 2320,
-                110
+                100
             ]
         },
         {
             "parameters": {
-                "jsCode": "const claudeData = $('Confidence Gate').item.json;\nconst binaryItems = $input.item.binary || {};\n// Fallback: search for any binary property if 'data' is missing\nconst mainBinary = binaryItems.data || Object.values(binaryItems)[0];\n\nreturn [{\n  json: {\n    ...claudeData,\n    image_source: 'wavespeed_seedream',\n    image_height: 1350,\n    image_width: 1080\n  },\n  binary: {\n    image_raw: mainBinary || {\n      data: '',\n      mimeType: 'image/png',\n      fileName: 'empty.png'\n    }\n  }\n}];"
+                "jsCode": "// ============================================================\n// HYPERSCALER NEWS CARD COMPOSITOR v5.2\n// Composites text overlay onto AI-generated background\n// Supports n8n v2.x binary storage and JPEG/PNG formats\n// ============================================================\n\nconst geminiData = $('Confidence Gate').item.json;\nconst binaryItems = $input.item.binary || {};\nconst binKeys = Object.keys(binaryItems);\n\n// \u2500\u2500 Binary resolution (n8n 2.x Buffer handling) ──────────────\nconst propName = binaryItems.data ? 'data' : (binKeys.length > 0 ? binKeys[0] : null);\nif (!propName) {\n  throw new Error('[Compositor] No binary found in input. Available keys: ' + binKeys.join(', '));\n}\n\nconst testBuf = await this.helpers.getBinaryDataBuffer(0, propName);\nif (!testBuf || testBuf.length < 100) {\n  throw new Error(`[Compositor] Binary is only ${testBuf ? testBuf.length : 0} bytes \u2014 download failed or URL expired.`);\n}\n\n// Support JPEG & PNG magic bytes\nconst isPng = [0x89, 0x50, 0x4E, 0x47].every((b, i) => testBuf[i] === b);\nconst isJpeg = [0xFF, 0xD8, 0xFF].every((b, i) => testBuf[i] === b);\nif (!isPng && !isJpeg) {\n  const hex = Array.from(testBuf.slice(0, 4)).map(b => b.toString(16).padStart(2,'0')).join(' ');\n  throw new Error(`[Compositor] Unsupported format (magic: ${hex}). WaveSpeed may have returned an error page.`);\n}\n\n// ---- Extract card data ----\nconst headline = (geminiData.headline || 'AI NEWS TODAY').toUpperCase().trim();\nconst highlights = (geminiData.headline_highlights || []).map(h => h.toUpperCase().trim());\nconst brandName = 'HYPERSCALER';\nconst subreddit = geminiData.subreddit || '';\n\n// ---- Build SVG overlay ----\nconst W = 1080;\nconst H = 1350;\n\nfunction xmlEscape(str) {\n  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&apos;');\n}\n\nfunction colorizeWords(text, highlights) {\n  const words = text.split(' ');\n  return words.map(word => {\n    const clean = word.replace(/[^A-Z0-9]/g, '');\n    const isCyan = highlights.some(h => h.includes(clean) || clean.includes(h.replace(/[^A-Z0-9]/g, '')));\n    return { word, isCyan };\n  });\n}\n\nfunction wrapWords(colorWords, maxCharsPerLine) {\n  const lines = [];\n  let currentLine = [];\n  let currentLen = 0;\n  for (const cw of colorWords) {\n    if (currentLen + cw.word.length + (currentLine.length > 0 ? 1 : 0) > maxCharsPerLine && currentLine.length > 0) {\n      lines.push(currentLine);\n      currentLine = [cw];\n      currentLen = cw.word.length;\n    } else {\n      if (currentLine.length > 0) currentLen += 1;\n      currentLen += cw.word.length;\n      currentLine.push(cw);\n    }\n  }\n  if (currentLine.length > 0) lines.push(currentLine);\n  return lines;\n}\n\nconst colorWords = colorizeWords(headline, highlights);\nconst wrappedLines = wrapWords(colorWords, 16);\n\nconst FONT_SIZE = 95;\nconst LINE_HEIGHT = 105;\nconst TEXT_START_Y = H - 80 - (wrappedLines.length * LINE_HEIGHT);\nconst TEXT_X = 60;\n\nlet textSvg = '';\nwrappedLines.forEach((line, lineIdx) => {\n  const y = TEXT_START_Y + (lineIdx * LINE_HEIGHT);\n  let xOffset = TEXT_X;\n  line.forEach((cw, wi) => {\n    const color = cw.isCyan ? '#00D4FF' : '#FFFFFF';\n    const charW = 56;\n    textSvg += `<text x=\"${xOffset}\" y=\"${y}\" font-family=\"'Arial Black', 'Impact', sans-serif\" font-size=\"${FONT_SIZE}\" font-weight=\"900\" fill=\"${color}\" letter-spacing=\"-2\">${xmlEscape(cw.word)}</text>`;\n    xOffset += (cw.word.length * charW) + 20;\n  });\n});\n\nconst GRAD_START_FRAC = 0.45;\nconst svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"${W}\" height=\"${H}\">\n  <defs>\n    <linearGradient id=\"darkGrad\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">\n      <stop offset=\"${GRAD_START_FRAC}\" stop-color=\"#000000\" stop-opacity=\"0\"/>\n      <stop offset=\"0.72\" stop-color=\"#060810\" stop-opacity=\"0.92\"/>\n      <stop offset=\"1\" stop-color=\"#000000\" stop-opacity=\"1\"/>\n    </linearGradient>\n    <linearGradient id=\"cyanLine\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">\n      <stop offset=\"0\" stop-color=\"#00D4FF\" stop-opacity=\"0\"/>\n      <stop offset=\"0.2\" stop-color=\"#00D4FF\" stop-opacity=\"1\"/>\n      <stop offset=\"0.8\" stop-color=\"#00D4FF\" stop-opacity=\"1\"/>\n      <stop offset=\"1\" stop-color=\"#00D4FF\" stop-opacity=\"0\"/>\n    </linearGradient>\n    <filter id=\"textShadow\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\">\n      <feDropShadow dx=\"0\" dy=\"4\" stdDeviation=\"8\" flood-color=\"#000000\" flood-opacity=\"0.9\"/>\n    </filter>\n  </defs>\n  <rect x=\"0\" y=\"0\" width=\"${W}\" height=\"${H}\" fill=\"url(#darkGrad)\"/>\n  <rect x=\"60\" y=\"${TEXT_START_Y - 90}\" width=\"${W - 120}\" height=\"2\" fill=\"url(#cyanLine)\"/>\n  <text x=\"${W/2}\" y=\"${TEXT_START_Y - 52}\" font-family=\"'Arial', sans-serif\" font-size=\"28\" font-weight=\"700\" fill=\"#FFFFFF\" text-anchor=\"middle\" letter-spacing=\"8\" opacity=\"0.9\" filter=\"url(#textShadow)\">\u2014 ${xmlEscape(brandName)} \u2014</text>\n  <rect x=\"50\" y=\"50\" width=\"180\" height=\"44\" rx=\"22\" fill=\"#00D4FF\" opacity=\"0.15\"/>\n  <rect x=\"50\" y=\"50\" width=\"180\" height=\"44\" rx=\"22\" fill=\"none\" stroke=\"#00D4FF\" stroke-width=\"1.5\" opacity=\"0.8\"/>\n  <text x=\"140\" y=\"79\" font-family=\"'Arial', sans-serif\" font-size=\"20\" font-weight=\"600\" fill=\"#00D4FF\" text-anchor=\"middle\" letter-spacing=\"1\">r/${xmlEscape(subreddit)}</text>\n  <g filter=\"url(#textShadow)\">${textSvg}</g>\n</svg>`;\n\nconst svgBase64 = Buffer.from(svg).toString('base64');\n\nreturn [{\n  json: { ...geminiData, compositor_mode: 'svg_overlay', svg_overlay_base64: svgBase64, image_source: 'wavespeed_seedream' },\n  binary: {\n    bg_image: binaryItems[propName] || { data: testBuf.toString('base64'), mimeType: isPng ? 'image/png' : 'image/jpeg', fileName: 'background.' + (isPng ? 'png' : 'jpg') },\n    svg_overlay: { data: svgBase64, mimeType: 'image/svg+xml', fileName: 'overlay.svg' }\n  }\n}];"
             },
-            "id": "node-wavespeed-to-binary",
-            "name": "Normalize WaveSpeed Output",
+            "id": "node-compositor",
+            "name": "Build SVG Text Overlay",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                2480,
-                110
+                2650,
+                100
             ]
         },
         {
             "parameters": {
-                "jsCode": "// HYPERSCALER: Pass the direct Seedream-v4 output as the final card\nconst bin = $input.item.binary || {};\nconst finalBin = bin.image_raw || bin.data || Object.values(bin)[0] || null;\nif (!finalBin) throw new Error('No final image binary found. Check WaveSpeed normalization.');\nreturn [{\n  json: $input.item.json,\n  binary: { final_card: finalBin }\n}];"
+                "jsCode": "const json = $input.item.json;\nconst bin = $input.item.binary || {};\n\n// \u2500\u2500 Input validation (n8n 2.x helper) ──────────────\nif (!bin.bg_image) throw new Error('[Sharp] Missing bg_image binary property');\nif (!json.svg_overlay_base64) throw new Error('[Sharp] Missing svg_overlay_base64 in json');\n\nconst bgBuffer = await this.helpers.getBinaryDataBuffer(0, 'bg_image');\nconst svgBuffer = Buffer.from(json.svg_overlay_base64, 'base64');\n\nif (!bgBuffer || bgBuffer.length < 100) throw new Error('[Sharp] bgBuffer is empty or too small');\n\n// Clean base64 for fallback\nconst bgBase64 = bgBuffer.toString('base64');\n\n// \u2500\u2500 Composite ──────────────────────────────────────\nlet finalBase64;\nlet compositorMethod = 'none';\n\ntry {\n  const sharp = require('sharp');\n  const finalPng = await sharp(bgBuffer)\n    .resize(1080, 1350, { fit: 'cover', position: 'top' })\n    .composite([{ input: svgBuffer, top: 0, left: 0 }])\n    .png({ quality: 95 })\n    .toBuffer();\n\n  if (!finalPng || finalPng.length < 1000) {\n    throw new Error(`[Sharp] Output too small (${finalPng ? finalPng.length : 0} bytes)`);\n  }\n  finalBase64 = finalPng.toString('base64');\n  compositorMethod = 'sharp_direct';\n\n} catch (sharpErr) {\n  const workerUrl = $env.SHARP_WORKER_URL;\n  if (workerUrl) {\n    const workerSecret = $env.SHARP_WORKER_SECRET || '';\n    const res = await fetch(workerUrl, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${workerSecret}` },\n      body: JSON.stringify({ base_image_b64: bgBase64, svg_overlay_b64: json.svg_overlay_base64, width: 1080, height: 1350 })\n    });\n    if (!res.ok) {\n      const errBody = await res.text().catch(() => '');\n      throw new Error(`[Sharp Worker] HTTP ${res.status}: ${errBody}`);\n    }\n    const resultBuf = await res.arrayBuffer();\n    if (!resultBuf || resultBuf.byteLength < 100) {\n      throw new Error(`[Sharp Worker] Response too small (${resultBuf ? resultBuf.byteLength : 0} bytes)`);\n    }\n    finalBase64 = Buffer.from(resultBuf).toString('base64');\n    compositorMethod = 'sharp_worker';\n  } else {\n    finalBase64 = bgBase64;\n    compositorMethod = 'bg_passthrough_no_overlay';\n  }\n}\n\n// \u2500\u2500 Output validation ───────────────────────────────\nif (!finalBase64) throw new Error('[Sharp] compositor returned null output');\n\nconst outBuf = Buffer.from(finalBase64, 'base64');\nif (outBuf.length < 100) throw new Error(`[Sharp] output is ${outBuf.length} bytes \u2014 invalid`);\n\n// Verify PNG magic on output\nconst outHasPng = [0x89, 0x50, 0x4E, 0x47].every((b, i) => outBuf[i] === b);\nif (!outHasPng) throw new Error('[Sharp] output is not a PNG');\n\nreturn [{\n  json: { ...json, compositor_status: 'complete', compositor_method: compositorMethod },\n  binary: {\n    final_card: {\n      data: finalBase64,\n      mimeType: 'image/png',\n      fileName: 'hyperscaler_card.png'\n    }\n  }\n}];"
+            },
+            "id": "node-sharp-composite",
+            "name": "Sharp Composite Photo + Text",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2760,
+                100
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const bin = $input.item.binary || {};\nconst finalBin = bin.final_card || bin.data || Object.values(bin)[0] || null;\nif (!finalBin) throw new Error('No final card binary found.');\nreturn [{ json: $input.item.json, binary: { final_card: finalBin } }];"
             },
             "id": "node-pick-final",
             "name": "Set Final Binary",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                3140,
-                110
-            ]
-        },
-        {
-            "parameters": {
-                "jsCode": "// HYPERSCALER DEBUG: Generate Base64 string for easy preview/download\nconst bin = $input.item.binary?.final_card || {};\nreturn [{\n  json: {\n    ...$input.item.json,\n    debug_base64_image: bin.data || 'error_no_binary'\n  },\n  binary: $input.item.binary\n}];"
-            },
-            "id": "node-debug-final",
-            "name": "Debug Final Image",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [
-                3250,
-                110
+                2980,
+                100
             ]
         },
         {
@@ -412,34 +458,34 @@
             "type": "n8n-nodes-base.googleDrive",
             "typeVersion": 3,
             "position": [
-                3360,
-                110
+                3200,
+                100
             ]
         },
         {
             "parameters": {
-                "jsCode": "// Extract Drive file metadata and build share URLs\n// Use $input.item.json for Drive response, and carry binary forward\nconst driveData = $input.item.json;\nreturn [{\n  json: {\n    ...driveData,\n    drive_file_id: driveData.id || '',\n    drive_view_url: driveData.webViewLink || '',\n    drive_download_url: driveData.webContentLink || `https://drive.google.com/uc?id=${driveData.id}`,\n    drive_direct_img: `https://drive.google.com/thumbnail?id=${driveData.id}&sz=w800`\n  },\n  binary: $input.item.binary\n}];"
+                "jsCode": "const driveData = $input.item.json;\nreturn [{ json: { ...driveData, drive_file_id: driveData.id || '', drive_view_url: driveData.webViewLink || '', drive_download_url: driveData.webContentLink || `https://drive.google.com/uc?id=${driveData.id}`, drive_direct_img: `https://drive.google.com/thumbnail?id=${driveData.id}&sz=w800` }, binary: $input.item.binary }];"
             },
             "id": "node-set-drive-url",
             "name": "Extract Drive URL",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                3580,
-                110
+                3420,
+                100
             ]
         },
         {
             "parameters": {
-                "jsCode": "// Merge Drive URL data back with the original Claude-parsed article data\n// Pull Claude data from Parse Gemini Response node (the fully parsed JSON)\nconst driveInfo = $input.item.json;\nconst claudeData = $('Parse Gemini Response').item.json;\nreturn [{\n  json: {\n    ...claudeData,\n    drive_file_id: driveInfo.drive_file_id || driveInfo.id || '',\n    drive_view_url: driveInfo.drive_view_url || driveInfo.webViewLink || '',\n    drive_download_url: driveInfo.drive_download_url || driveInfo.webContentLink || '',\n    drive_direct_img: driveInfo.drive_direct_img || `https://drive.google.com/thumbnail?id=${driveInfo.id}&sz=w800`,\n    image_source: claudeData.image_source || 'ai_generated'\n  },\n  binary: $input.item.binary\n}];"
+                "jsCode": "const driveInfo = $input.item.json;\nconst claudeData = $('Confidence Gate').item.json;\nreturn [{ json: { ...claudeData, drive_file_id: driveInfo.drive_file_id || driveInfo.id || '', drive_view_url: driveInfo.drive_view_url || driveInfo.webViewLink || '', drive_download_url: driveInfo.drive_download_url || driveInfo.webContentLink || '', drive_direct_img: driveInfo.drive_direct_img || `https://drive.google.com/thumbnail?id=${driveInfo.id}&sz=w800`, image_source: claudeData.image_source || 'ai_generated' }, binary: $input.item.binary }];"
             },
             "id": "node-merge-drive-claude",
             "name": "Merge Drive and Claude Data",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                3800,
-                110
+                3640,
+                100
             ]
         },
         {
@@ -457,8 +503,6 @@
                         "Headline": "={{ $json.headline }}",
                         "Summary": "={{ $json.summary }}",
                         "Full_Article": "={{ $json.full_article }}",
-                        "Entity": "={{ $json.entity }}",
-                        "Type": "={{ $json.type }}",
                         "Confidence": "={{ $json.confidence }}",
                         "Subreddit": "={{ $json.subreddit }}",
                         "Reddit_URL": "={{ $json.reddit_url }}",
@@ -478,8 +522,8 @@
             "type": "n8n-nodes-base.airtable",
             "typeVersion": 2.1,
             "position": [
-                4020,
-                110
+                3860,
+                100
             ],
             "credentials": {
                 "airtableTokenApi": {
@@ -501,7 +545,7 @@
             "type": "n8n-nodes-base.linkedIn",
             "typeVersion": 1,
             "position": [
-                4240,
+                4080,
                 20
             ]
         },
@@ -528,7 +572,7 @@
             "type": "n8n-nodes-base.facebookGraphApi",
             "typeVersion": 1,
             "position": [
-                4240,
+                4080,
                 160
             ]
         },
@@ -557,21 +601,21 @@
             "type": "n8n-nodes-base.facebookGraphApi",
             "typeVersion": 1,
             "position": [
-                4460,
+                4300,
                 160
             ]
         },
         {
             "parameters": {
                 "channel": "={{ $env.SLACK_CHANNEL || '#hyperscaler-man-posts' }}",
-                "text": "=*HYPERSCALER Posted:* {{ $json.headline }}\n{{ $json.entity }} | {{ $json.type }} | Confidence: {{ $json.confidence }}/10\n{{ $json.drive_view_url }}\nPosted to LinkedIn and Facebook"
+                "text": "=*HYPERSCALER Posted:* {{ $json.headline }}\nConfidence: {{ $json.confidence }}/10\n{{ $json.drive_view_url }}\nPosted to LinkedIn and Facebook"
             },
             "id": "node-success-notify",
             "name": "Slack Success",
             "type": "n8n-nodes-base.slack",
             "typeVersion": 2.1,
             "position": [
-                4680,
+                4520,
                 160
             ]
         },
@@ -601,63 +645,45 @@
             ]
         },
         {
-            "id": "sanitize-post-text-001",
-            "name": "Sanitize Post Text",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [
-                740,
-                300
-            ],
             "parameters": {
-                "jsCode": "const sanitize = (val) => {\n  if (val == null) return '';\n  return String(val)\n    .replace(/\\\\/g, '')\n    .replace(/\"/g, \"'\")\n    .replace(/\\n/g, ' ')\n    .replace(/\\r/g, '')\n    .replace(/\\t/g, ' ')\n    .replace(/[\\x00-\\x1F\\x7F]/g, '');\n};\n\nreturn [{\n  json: {\n    ...$input.item.json,\n    title:      sanitize($input.item.json.title),\n    text:       sanitize($input.item.json.text),\n    source_url: sanitize($input.item.json.source_url),\n    subreddit:  sanitize($input.item.json.subreddit),\n    reddit_url: sanitize($input.item.json.reddit_url),\n    date:       sanitize($input.item.json.date),\n  }\n}];"
-            }
-        },
-        {
-            "id": "has-article-text-001",
-            "name": "Has Article Text?",
-            "type": "n8n-nodes-base.if",
-            "typeVersion": 1,
-            "position": [
-                390,
-                300
-            ],
-            "parameters": {
-                "conditions": {
-                    "string": [
-                        {
-                            "value1": "={{ $json.text }}",
-                            "operation": "isNotEmpty"
-                        }
-                    ]
-                }
-            }
-        },
-        {
-            "id": "fetch-article-content-001",
-            "name": "Fetch Article Content",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [
-                560,
-                440
-            ],
-            "parameters": {
-                "jsCode": "const post = $input.item.json;\nconst firecrawlKey = $env.FIRECRAWL_API_KEY;\n\n// Skip crawling for Reddit galleries / raw images\nconst skipPatterns = ['i.redd.it', '/gallery/', 'reddit.com/r/'];\nconst shouldSkip = !post.source_url ||\n  skipPatterns.some(p => post.source_url.includes(p));\n\nlet articleText = '';\n\nif (!shouldSkip) {\n  try {\n    const res = await fetch('https://api.firecrawl.dev/v1/scrape', {\n      method: 'POST',\n      headers: {\n        'Authorization': `Bearer ${firecrawlKey}`,\n        'Content-Type': 'application/json'\n      },\n      body: JSON.stringify({\n        url: post.source_url,\n        formats: ['markdown'],\n        onlyMainContent: true\n      })\n    });\n    const data = await res.json();\n    const raw = data?.data?.markdown || data?.data?.content || '';\n    articleText = raw.substring(0, 3000);\n  } catch (e) {\n    articleText = '';\n  }\n}\n\nreturn [{ json: { ...post, text: articleText } }];\n"
-            }
-        },
-        {
-            "parameters": {
-                "jsCode": "const json = $input.item.json;\nreturn {\n  FINAL_SUMMARY: {\n    brand: \"HYPERSCALER\",\n    title: json.headline || json.title,\n    public_drive_url: json.drive_view_url || 'Checking GDrive...',\n    social_posting: \"LinkedIn/Facebook/Slack automation initiated.\",\n    image_source: json.image_source\n  }\n};"
+                "jsCode": "return [{ json: { FINAL_SUMMARY: { brand: 'HYPERSCALER', title: $input.item.json.headline, status: 'complete' } } }];"
             },
             "id": "node-final-summary",
             "name": "Final Summary",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                4800,
-                110
+                4740,
+                160
             ]
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "={{ $json.wavespeed_image_url }}",
+                "responseFormat": "file"
+            },
+            "id": "node-download-wavespeed-image",
+            "name": "Download WaveSpeed Image",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                2430,
+                100
+            ]
+        },
+        {
+            "id": "node-parse-wavespeed-url",
+            "name": "Parse WaveSpeed URL",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2375,
+                100
+            ],
+            "parameters": {
+                "jsCode": "// Robustly extract the WaveSpeed generated image URL from multiple possible response shapes\nconst resp = $input.item.json;\n\nconst url =\n  resp?.data?.outputs?.[0] ||\n  resp?.outputs?.[0] ||\n  resp?.data?.images?.[0] ||\n  resp?.images?.[0] ||\n  resp?.data?.url ||\n  resp?.url ||\n  resp?.data?.result ||\n  resp?.result;\n\nif (!url || typeof url !== 'string' || !url.startsWith('http')) {\n  const raw = JSON.stringify(resp).slice(0, 500);\n  throw new Error(`[WaveSpeed] Could not extract image URL from response. Tried data.outputs[0], outputs[0], data.images[0], images[0], data.url, url. Raw response: ${raw}`);\n}\n\nreturn [{ json: { ...$input.item.json, wavespeed_image_url: url } }];"
+            }
         }
     ],
     "connections": {
@@ -726,6 +752,46 @@
                 [
                     {
                         "node": "Has Article Text?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Has Article Text?": {
+            "main": [
+                [
+                    {
+                        "node": "Sanitize Post Text",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Fetch Article Content",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch Article Content": {
+            "main": [
+                [
+                    {
+                        "node": "Sanitize Post Text",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sanitize Post Text": {
+            "main": [
+                [
+                    {
+                        "node": "Gemini Analysis",
                         "type": "main",
                         "index": 0
                     }
@@ -867,14 +933,25 @@
             "main": [
                 [
                     {
-                        "node": "Normalize WaveSpeed Output",
+                        "node": "Parse WaveSpeed URL",
                         "type": "main",
                         "index": 0
                     }
                 ]
             ]
         },
-        "Normalize WaveSpeed Output": {
+        "Build SVG Text Overlay": {
+            "main": [
+                [
+                    {
+                        "node": "Sharp Composite Photo + Text",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sharp Composite Photo + Text": {
             "main": [
                 [
                     {
@@ -886,17 +963,6 @@
             ]
         },
         "Set Final Binary": {
-            "main": [
-                [
-                    {
-                        "node": "Debug Final Image",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Debug Final Image": {
             "main": [
                 [
                     {
@@ -989,46 +1055,6 @@
                 ]
             ]
         },
-        "Sanitize Post Text": {
-            "main": [
-                [
-                    {
-                        "node": "Gemini Analysis",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Has Article Text?": {
-            "main": [
-                [
-                    {
-                        "node": "Sanitize Post Text",
-                        "type": "main",
-                        "index": 0
-                    }
-                ],
-                [
-                    {
-                        "node": "Fetch Article Content",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Fetch Article Content": {
-            "main": [
-                [
-                    {
-                        "node": "Sanitize Post Text",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
         "Slack Success": {
             "main": [
                 [
@@ -1050,83 +1076,48 @@
                     }
                 ]
             ]
+        },
+        "Download WaveSpeed Image": {
+            "main": [
+                [
+                    {
+                        "node": "Build SVG Text Overlay",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse WaveSpeed URL": {
+            "main": [
+                [
+                    {
+                        "node": "Download WaveSpeed Image",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
         }
     },
     "settings": {
         "executionOrder": "v1",
         "saveManualExecutions": true,
         "callerPolicy": "workflowsFromSameOwner",
-        "errorWorkflow": "",
         "timezone": "UTC"
     },
-    "staticData": null,
-    "updatedAt": "2026-03-03T00:00:00.000Z",
-    "versionId": "v4.0.0",
-    "_FIXES_APPLIED": {
-        "FIX_1_SCHEDULE_TRIGGER": "Schedule Trigger now correctly fans out to both List Subreddits AND Search Reddit Keywords from a single output[0]. Previously had two outputs which scheduleTrigger does not support.",
-        "FIX_2_NODE_POSITIONS": "Filter Dedupe and Rank moved to [280,300] and Claude Analysis moved to [500,300] to eliminate the position overlap that caused UI connection confusion.",
-        "FIX_3_EXTRACT_DRIVE_URL": "Node no longer references $('Claude Analysis').item.json which was the raw API response. A new Merge Drive and Claude Data node properly combines Drive file metadata with Claude parsed content from Parse Gemini Response.",
-        "FIX_4_MERGE_DRIVE_CLAUDE_NODE": "Added new node between Extract Drive URL and Airtable to correctly merge Drive URLs with Claude article data so Airtable receives all fields.",
-        "FIX_5_FACEBOOK_SYNTAX": "Fixed $node[\"Facebook Upload Photo\"] to use correct $('Facebook Upload Photo').item.json.id syntax.",
-        "FIX_6_NO_BLACK_BACKGROUND": "Replaced solid black rect fills (#000000) in both Compose Card and SVG Fallback with deep navy gradient (0a1535 to 060d22) so the card has depth without a flat black panel.",
-        "FIX_7_NO_EMOJIS": "Claude Analysis prompt now explicitly instructs the model to produce no emojis in headline, summary, article, linkedin, or facebook outputs.",
-        "FIX_8_AIRTABLE_ENV_VAR": "Changed CONGRESS_AIRTABLE_BASE_ID reference to AIRTABLE_BASE_ID for consistency with setup guide.",
-        "FIX_9_SLACK_CHANNEL_NAME": "Removed space in Slack channel fallback from '#hyperscaler man-posts' to '#hyperscaler-man-posts' which is a valid Slack channel name format."
+    "_VERSION": "v5.0.0",
+    "_WHAT_CHANGED": {
+        "ROOT_CAUSE_FIX": "Image generation models cannot render readable text. The old workflow sent text/headline instructions to Seedream-v4 which produced diagrams and abstract imagery instead of news cards.",
+        "FIX_1_CLEAN_IMAGE_PROMPT": "WaveSpeed Seedream now gets a PHOTO-ONLY prompt. The image_prompt from Gemini instructs: cinematic background photo of the subject, NO TEXT NO WORDS NO LOGOS.",
+        "FIX_2_SVG_OVERLAY_NODE": "New 'Build SVG Text Overlay' node generates an SVG with: dark bottom gradient, brand divider line, brand name, headline with cyan highlights, subreddit badge. This matches the GetIntoAI style exactly.",
+        "FIX_3_SHARP_COMPOSITOR": "New 'Sharp Composite Photo + Text' node merges the AI photo + SVG using sharp (built into n8n). Falls back to Cloudflare Worker (SHARP_WORKER_URL) or raw image if sharp unavailable.",
+        "FIX_4_REMOVED_UNUSED_NODES": "Removed Download Multi-References, Gemini Visual Designer, Prep WaveSpeed, Normalize WaveSpeed Output, Debug Final Image nodes. Pipeline is now cleaner.",
+        "FIX_5_GEMINI_PROMPT": "Gemini Analysis prompt now asks for image_prompt (background photo only) and image_search_query separately. No more combined visual_prompt that confused image generators."
     },
-    "_SETUP_GUIDE": {
-        "STEP_1_ENV_VARS": {
-            "ANTHROPIC_API_KEY": "Get from console.anthropic.com - used for Claude news analysis",
-            "GOOGLE_AI_API_KEY": "Get from aistudio.google.com - used for Imagen 3 image generation",
-            "TAVILY_API_KEY": "Get from tavily.com - used to find press images",
-            "GOOGLE_DRIVE_FOLDER_ID": "The ID from your GDrive folder URL: drive.google.com/drive/folders/THIS_PART",
-            "AIRTABLE_BASE_ID": "From airtable.com/appXXXXX - your base ID",
-            "LINKEDIN_PERSON_URN": "Format: urn:li:person:YOUR_PROFILE_ID",
-            "FACEBOOK_PAGE_ID": "Numeric ID of your Facebook Page",
-            "SLACK_CHANNEL": "#hyperscaler-man-posts (optional but recommended)",
-            "SHARP_WORKER_URL": "OPTIONAL: Your Cloudflare Worker URL for pixel-perfect PNG compositing. If blank, SVG fallback is used automatically.",
-            "SHARP_WORKER_SECRET": "OPTIONAL: Auth bearer token for your Sharp worker"
-        },
-        "STEP_2_CREDENTIALS": {
-            "Google Drive": "Add OAuth2 credential in n8n Settings > Credentials",
-            "Airtable": "Add Personal Access Token credential",
-            "LinkedIn": "Add OAuth2 credential - needs r_liteprofile and w_member_social scopes",
-            "Facebook": "Add credential with pages_manage_posts and pages_read_engagement",
-            "Slack": "Add OAuth2 or Bot Token credential"
-        },
-        "STEP_3_AIRTABLE_FIELDS": {
-            "table_name": "HYPERSCALER_BRIEFS",
-            "fields": [
-                "Headline",
-                "Summary",
-                "Full_Article",
-                "Entity",
-                "Type",
-                "Confidence",
-                "Subreddit",
-                "Reddit_URL",
-                "Source_URL",
-                "Date",
-                "Drive_Image_URL",
-                "Drive_Direct_IMG",
-                "LinkedIn_Post",
-                "Facebook_Post",
-                "Status",
-                "Image_Source"
-            ]
-        },
-        "STEP_4_SHARP_WORKER_OPTIONAL": {
-            "note": "For pixel-perfect PNG compositing deploy a Cloudflare Worker with Sharp. The worker should accept base_image_b64 and svg_overlay_b64, resize the image to 800x650, overlay the SVG on a 800x1000 canvas, and return the final PNG binary.",
-            "without_worker": "If SHARP_WORKER_URL is empty the workflow automatically uses SVG Fallback which produces a valid SVG card accepted by most platforms."
-        },
-        "CARD_STYLE": {
-            "format": "800x1000px vertical card",
-            "top_section": "Full photo or AI-generated image 800x650",
-            "bottom_section": "Deep navy gradient overlay - no solid black",
-            "left_bar": "5px electric blue #1a9fff accent bar full height",
-            "separator": "HYPERSCALER text with lines on both sides",
-            "headline": "Barlow Condensed 900 weight 70px ALL CAPS alternating blue and off-white words",
-            "badge": "Top-right colored badge showing content type",
-            "headline_colors": "Blue #1a9fff for even-indexed words and named entities, off-white #e8eaf0 for odd-indexed words"
-        }
+    "_SETUP": {
+        "SHARP_WORKER_URL": "OPTIONAL. If n8n cannot load sharp natively, deploy a Cloudflare Worker that accepts {base_image_b64, svg_overlay_b64, width, height} and returns a composited PNG.",
+        "ENV_VARS_SAME": "All env vars from v4 still apply. No new vars needed.",
+        "AIRTABLE_FIELDS_SAME": "Same Airtable schema as v4."
     }
 }
