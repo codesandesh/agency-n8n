@@ -1,0 +1,1132 @@
+{
+    "id": 1,
+    "name": "Hyperscaler - Full Autonomous Branding Factory v4 FIXED",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "hours",
+                            "hoursInterval": 6
+                        }
+                    ]
+                }
+            },
+            "id": "node-trigger",
+            "name": "Schedule Trigger",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                -600,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const subreddits = [\n  'AI_Agents', 'LLMDevs', 'LocalLLaMA', 'agents',\n  'AutoGPT', 'LangChain', 'crewAI', 'MachineLearning',\n  'artificial', 'singularity', 'Futurology'\n];\n// Shuffle subreddits to ensure variety in each run\nconst shuffled = subreddits.sort(() => Math.random() - 0.5);\nreturn shuffled.map(s => ({ json: { subreddit: s } }));"
+            },
+            "id": "node-list-subs",
+            "name": "List Subreddits",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -380,
+                160
+            ]
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "=https://www.reddit.com/r/{{ $json.subreddit }}/new.json?limit=25",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "User-Agent",
+                            "value": "Mozilla/5.0 (compatible; Hyperscaler ManBot/4.0)"
+                        }
+                    ]
+                },
+                "options": {
+                    "retryOnFailure": true,
+                    "maxRetries": 3,
+                    "waitBetweenRetries": 5000
+                }
+            },
+            "id": "node-fetch-reddit",
+            "name": "Fetch Subreddit Posts",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                -160,
+                160
+            ]
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "={{ (function() {\n  const queries = [\n    'agentic+AI+OR+autonomous+agent+OR+LLM+agent',\n    'AI+automation+OR+AI+workflow+OR+multi-agent+systems',\n    'LLM+breakthrough+OR+new+AI+model+OR+LLM+evaluation',\n    'AI+robotics+OR+embodied+AI+OR+visual+LLM',\n    'open+source+LLM+OR+local+LLaMA+OR+Mistral+AI'\n  ];\n  const randomQuery = queries[Math.floor(Math.random() * queries.length)];\n  return 'https://www.reddit.com/search.json?q=' + randomQuery + '&sort=new&t=day&limit=30';\n})() }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "User-Agent",
+                            "value": "Mozilla/5.0 (compatible; Hyperscaler ManBot/4.0)"
+                        }
+                    ]
+                },
+                "options": {
+                    "retryOnFailure": true,
+                    "maxRetries": 3
+                }
+            },
+            "id": "node-search-reddit",
+            "name": "Search Reddit Keywords",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                -160,
+                440
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "append"
+            },
+            "id": "node-merge-reddit",
+            "name": "Merge Reddit Sources",
+            "type": "n8n-nodes-base.merge",
+            "typeVersion": 2.1,
+            "position": [
+                60,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const items = $input.all();\nconst seen = new Set();\nconst results = [];\nconst now = Date.now() / 1000;\nconst cutoff = now - (48 * 3600);\n\nconst staticData = $getWorkflowStaticData('global');\nstaticData.processedPostIds = staticData.processedPostIds || [];\nstaticData.recentTopics = staticData.recentTopics || [];\nconst processedIds = new Set(staticData.processedPostIds);\n\nconst AGENTIC_KEYWORDS = [\n  'agent', 'agentic', 'autonomous', 'llm', 'gpt', 'claude', 'gemini',\n  'langchain', 'crewai', 'autogpt', 'langgraph', 'workflow', 'ai tool',\n  'ai model', 'openai', 'anthropic', 'multi-agent', 'tool use',\n  'function call', 'reasoning', 'planning', 'ai assistant'\n];\n\nfor (const item of items) {\n  const children = item.json?.data?.children || [];\n  for (const post of children) {\n    const d = post.data;\n    if (!d || seen.has(d.id) || processedIds.has(d.id)) continue;\n    if (d.created_utc < cutoff) continue;\n    if (d.score < 2) continue;\n    \n    const title = d.title.toLowerCase();\n    const text = (d.title + ' ' + (d.selftext || '')).toLowerCase();\n    \n    // Topic Diversity Check\n    let varietyPenalty = 0;\n    staticData.recentTopics.forEach(topic => {\n      if (title.includes(topic.toLowerCase())) varietyPenalty += 10; // Increased penalty\n    });\n\n    const isRelevant = AGENTIC_KEYWORDS.some(k => text.includes(k));\n    if (!isRelevant) continue;\n    \n    seen.add(d.id);\n    \n    // Add a RANDOM FACTOR to the score for variety across runs\n    // This ensures that even if static data resets, we don't always pick the same one\n    const randomFactor = Math.random() * 5;\n\n    results.push({\n      json: {\n        post_id: d.id,\n        title: d.title,\n        text: (d.selftext || '').substring(0, 1500),\n        subreddit: d.subreddit,\n        reddit_url: 'https://reddit.com' + d.permalink,\n        source_url: d.url || 'https://reddit.com' + d.permalink,\n        score: (d.score - varietyPenalty) + randomFactor,\n        original_score: d.score,\n        date: new Date(d.created_utc * 1000).toISOString()\n      }\n    });\n  }\n}\n\n// SHUFFLE BEFORE SORTING to break ties randomly\nconst shuffledResults = results.sort(() => Math.random() - 0.5);\n\n// Take top 10 from the shuffled/weighted results\nconst selected = shuffledResults\n  .sort((a, b) => b.json.score - a.json.score)\n  .slice(0, 10);\n\nfor (const item of selected) {\n  staticData.processedPostIds.push(item.json.post_id);\n  const words = item.json.title.split(' ').filter(w => w.length > 5).slice(0, 3); \n  staticData.recentTopics.push(...words);\n}\n\nif (staticData.processedPostIds.length > 2000) {\n  staticData.processedPostIds = staticData.processedPostIds.slice(-2000);\n}\nif (staticData.recentTopics.length > 50) {\n  staticData.recentTopics = staticData.recentTopics.slice(-50);\n}\n\nreturn selected;"
+            },
+            "id": "node-filter-dedupe",
+            "name": "Filter Dedupe and Rank",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                280,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "x-goog-api-key",
+                            "value": "={{ $env.GOOGLE_AI_API_KEY }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"You are a professional news graphic designer for HYPERSCALER. Your job is to analyze tech news and generate a hyper-realistic, cinematic visual direction for a high-end News Card.\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n🎯 MASTER PROMPT — CINEMATIC NEWS CARD SYSTEM\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\nSTEP 1 — NEWS ANALYSIS\\nAnalyze the news for key subjects and the headline core.\\n\\nTitle: {{ $json.title }}\\nText: {{ $json.text }}\\nScore: {{ $json.original_score }}\\nVariety Context: {{ $getWorkflowStaticData('global').recentTopics.join(', ') }}\\n\\nSTEP 2 — VISUAL DIRECTION (PRECISE)\\nGenerate a specific scene prompt for Seedream-v4. DO NOT include vibe, sarcasm, or unrelated classifications.\\n\\nReturn ONLY JSON structure:\\n{\\n  \\\"headline\\\": \\\"{{ $json.title.toUpperCase() }}\\\",\\n  \\\"headline_highlights\\\": [\\\"1-2 key words from the headline to be colored sky-blue\\\"],\\n  \\\"summary\\\": \\\"Concise professional summary.\\\",\\n  \\\"full_article\\\": \\\"Technical analysis.\\\",\\n  \\\"image_search_query\\\": \\\"{{ $json.title }} press photo\\\",\\n  \\\"visual_prompt\\\": \\\"HERO SUBJECT DESCRIPTION (DETAILED) + CINEMATIC ENVIRONMENT + DESCRIPTION OF A SLEEK SEMI-TRANSPARENT BLACK HORIZONTAL BAR AT THE BOTTOM 1/4 WITH THE HEADLINE AND A SMALL BRAND DIVIDER LINE ABOVE IT.\\\",\\n  \\\"linkedin\\\": \\\"LinkedIn text (no emojis)\\\",\\n  \\\"facebook\\\": \\\"Facebook text (no emojis)\\\",\\n  \\\"source_url\\\": \\\"{{ $json.source_url }}\\\",\\n  \\\"subreddit\\\": \\\"{{ $json.subreddit }}\\\",\\n  \\\"reddit_url\\\": \\\"{{ $json.reddit_url }}\\\",\\n  \\\"date\\\": \\\"{{ $json.date }}\\\",\\n  \\\"confidence\\\": 8\\n}\"\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"maxOutputTokens\": 8192,\n    \"temperature\": 0.7\n  }\n}"
+            },
+            "id": "node-claude-analysis",
+            "name": "Gemini Analysis",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                500,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "try {\n  const raw = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  const cleaned = raw\n    .replace(/```json\\n?/gi, '')\n    .replace(/```\\n?/gi, '')\n    .trim();\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (!match) throw new Error('No JSON found in Gemini response');\n  const parsed = JSON.parse(match[0]);\n  if (!parsed.headline) throw new Error('Missing headline field');\n  return [{ json: parsed }];\n} catch(e) {\n  console.error('Parse error:', e.message);\n  return [{ json: { _parse_error: e.message, _raw: $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text?.substring(0, 2000) } }];\n}"
+            },
+            "id": "node-parse-claude",
+            "name": "Parse Gemini Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                720,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{ $json._parse_error || '' }}",
+                            "operation": "isEmpty"
+                        }
+                    ]
+                }
+            },
+            "id": "node-error-check",
+            "name": "Valid Response",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                940,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "number": [
+                        {
+                            "value1": "={{ parseInt($json.confidence) || 0 }}",
+                            "operation": "largerEqual",
+                            "value2": 6
+                        }
+                    ]
+                }
+            },
+            "id": "node-confidence-gate",
+            "name": "Confidence Gate",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                1160,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.tavily.com/search",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"api_key\": \"{{ $env.TAVILY_API_KEY }}\",\n  \"query\": \"{{ $json.image_search_query }}\",\n  \"search_depth\": \"advanced\",\n  \"include_images\": true,\n  \"max_results\": 5,\n  \"include_answer\": false\n}"
+            },
+            "id": "node-tavily-search",
+            "name": "Tavily Search",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1380,
+                100
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Merge Tavily image results with Claude analysis data\n// Claude data is retrieved from the Confidence Gate node which holds the parsed+validated data\nconst tavilyResult = $input.item.json;\nconst images = tavilyResult.images || [];\n\n// Filter: prefer JPG/PNG, avoid generic/logo images\nconst validImages = images.filter(url =>\n  typeof url === 'string' &&\n  (url.endsWith('.jpg') || url.endsWith('.jpeg') || url.endsWith('.png')) &&\n  !url.includes('logo') &&\n  !url.includes('icon') &&\n  !url.includes('favicon') &&\n  !url.includes('thumb') &&\n  !url.includes('.svg')\n);\n\n// SHUFFLE for true variety across runs\n// This ensures that even for the same search results, we pick different images\nconst shuffledImages = validImages.sort(() => Math.random() - 0.5);\nconst goodImage = shuffledImages.length > 0 ? shuffledImages[0] : null;\n\n// Pull the Claude-parsed data from the Confidence Gate node\nconst claudeData = $('Confidence Gate').item.json;\n\nreturn [{\n  json: {\n    ...claudeData,\n    press_image_url: goodImage,\n    all_reference_images: shuffledImages.slice(0, 5), // Keep up to 5 for multi-ref\n    has_press_image: !!goodImage\n  }\n}];"
+            },
+            "id": "node-merge-tavily",
+            "name": "Merge Image Data",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1600,
+                100
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "boolean": [
+                        {
+                            "value1": "={{ $json.has_press_image }}",
+                            "operation": "equal",
+                            "value2": true
+                        }
+                    ]
+                }
+            },
+            "id": "node-image-branch",
+            "name": "Has Press Image",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                1820,
+                100
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const json = $input.item.json;\nconst urls = json.all_reference_images || [];\nconst base64Images = [];\n\nfor (const url of urls.slice(0, 5)) {\n  try {\n    const response = await fetch(url);\n    const arrayBuffer = await response.arrayBuffer();\n    const base64 = Buffer.from(arrayBuffer).toString('base64');\n    base64Images.push(base64);\n  } catch (e) {\n    console.error(`Failed to fetch ${url}:`, e.message);\n  }\n}\n\nreturn {\n  json: {\n    ...json,\n    reference_base64_images: base64Images\n  }\n};"
+            },
+            "id": "node-download-refs",
+            "name": "Download Multi-References",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2040,
+                20
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "x-goog-api-key",
+                            "value": "={{ $env.GOOGLE_AI_API_KEY }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ (function() {\n  const json = $input.item.json;\n  const images = json.reference_base64_images || [];\n  const parts = [\n    {\n      \"text\": `You are a professional news graphic designer. Refine the visual prompt for Seedream-v4 to generate a high-end News Card.\\n\\nNEWS SUMMARY: ${json.summary}\\nHEADLINE: ${json.headline}\\nHIGHLIGHTS: ${json.headline_highlights.join(', ')}\\n\\nMASTER RULES:\\n1. HERO SUBJECT: Use reference images to build a dramatic scene around the key subject. They should be the focus.\\n2. CINEMATIC LIGHTING: Dramatic studio lighting, rim lighting, 8K detail.\\n3. GRAPHICAL OVERLAY: A sleek, semi-transparent black horizontal bar at the bottom 1/4th.\\n4. TYPOGRAPHY: Render '${json.headline}' inside the bar in bold condensed white font. Render the highlight words (${json.headline_highlights.join(', ')}) in a vibrant 'Sky Blue'.\\n5. BRAND DIVIDER: A thin, elegant divider line above the headline with the 'HYPERSCALER' wordmark centered.\\n\\nCURRENT PROMPT: ${json.visual_prompt}`\n    }\n  ];\n  \n  images.forEach(b64 => {\n    parts.push({ \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": b64 } });\n  });\n\n  return JSON.stringify({\n    \"contents\": [{ \"parts\": parts }],\n    \"generationConfig\": { \"maxOutputTokens\": 1024, \"temperature\": 0.4 }\n  });\n})() }}"
+            },
+            "id": "node-gemini-visual-refine",
+            "name": "Gemini Visual Designer",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                2250,
+                20
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// HYPERSCALER: Finalize cinematic prompt from Gemini Visual Designer\nconst json = $input.item.json;\nlet refinedPrompt = json.visual_prompt;\n\n// Try to get refined prompt if Gemini Visual Designer was executed\ntry {\n  const geminiDesigner = $('Gemini Visual Designer');\n  if (geminiDesigner && geminiDesigner.item) {\n    const designerOutput = geminiDesigner.item.json;\n    refinedPrompt = designerOutput.candidates?.[0]?.content?.parts?.[0]?.text || refinedPrompt;\n  }\n} catch (e) {\n  // Node was likely skipped, fall back to initial visual_prompt\n}\n\nconst refs = json.reference_base64_images || [];\n\n// Final payload for WaveSpeed\nconst body = {\n  prompt: refinedPrompt.replace(/[\\r\\n]+/g, \" \").trim(),\n  aspect_ratio: \"4:5\",\n  output_format: \"png\",\n  enable_sync_mode: true,\n  image: refs[0] || json.press_image_url,\n  reference_images: refs\n};\n\nreturn {\n  json: {\n    wavespeed_payload: body,\n    ...json,\n    final_visual_prompt: refinedPrompt\n  }\n};"
+            },
+            "id": "node-prep-wavespeed",
+            "name": "Prep WaveSpeed",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2100,
+                110
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.wavespeed.ai/api/v3/bytedance/seedream-v4",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $env.WAVESPEED_API_KEY }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json.wavespeed_payload) }}",
+                "responseFormat": "file"
+            },
+            "id": "node-wavespeed-generate",
+            "name": "WaveSpeed Seedream",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                2320,
+                110
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const claudeData = $('Confidence Gate').item.json;\nconst binaryItems = $input.item.binary || {};\n// Fallback: search for any binary property if 'data' is missing\nconst mainBinary = binaryItems.data || Object.values(binaryItems)[0];\n\nreturn [{\n  json: {\n    ...claudeData,\n    image_source: 'wavespeed_seedream',\n    image_height: 1350,\n    image_width: 1080\n  },\n  binary: {\n    image_raw: mainBinary || {\n      data: '',\n      mimeType: 'image/png',\n      fileName: 'empty.png'\n    }\n  }\n}];"
+            },
+            "id": "node-wavespeed-to-binary",
+            "name": "Normalize WaveSpeed Output",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2480,
+                110
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// HYPERSCALER: Pass the direct Seedream-v4 output as the final card\nconst bin = $input.item.binary || {};\nconst finalBin = bin.image_raw || bin.data || Object.values(bin)[0] || null;\nif (!finalBin) throw new Error('No final image binary found. Check WaveSpeed normalization.');\nreturn [{\n  json: $input.item.json,\n  binary: { final_card: finalBin }\n}];"
+            },
+            "id": "node-pick-final",
+            "name": "Set Final Binary",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                3140,
+                110
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// HYPERSCALER DEBUG: Generate Base64 string for easy preview/download\nconst bin = $input.item.binary?.final_card || {};\nreturn [{\n  json: {\n    ...$input.item.json,\n    debug_base64_image: bin.data || 'error_no_binary'\n  },\n  binary: $input.item.binary\n}];"
+            },
+            "id": "node-debug-final",
+            "name": "Debug Final Image",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                3250,
+                110
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "upload",
+                "name": "={{ ($json.headline || 'AI_Card').replace(/[^a-zA-Z0-9 ]/g, '').substring(0, 55) + '_' + $now.format('YYYYMMDD_HHmm') + '.png' }}",
+                "driveId": {
+                    "value": "myDrive"
+                },
+                "folderId": {
+                    "value": "={{ $env.GOOGLE_DRIVE_FOLDER_ID }}"
+                },
+                "binaryData": true,
+                "binaryPropertyName": "final_card",
+                "options": {
+                    "permissionsUi": {
+                        "permissionsValues": {
+                            "role": "reader",
+                            "type": "anyone"
+                        }
+                    }
+                }
+            },
+            "id": "node-gdrive-upload",
+            "name": "GDrive Upload",
+            "type": "n8n-nodes-base.googleDrive",
+            "typeVersion": 3,
+            "position": [
+                3360,
+                110
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract Drive file metadata and build share URLs\n// Use $input.item.json for Drive response, and carry binary forward\nconst driveData = $input.item.json;\nreturn [{\n  json: {\n    ...driveData,\n    drive_file_id: driveData.id || '',\n    drive_view_url: driveData.webViewLink || '',\n    drive_download_url: driveData.webContentLink || `https://drive.google.com/uc?id=${driveData.id}`,\n    drive_direct_img: `https://drive.google.com/thumbnail?id=${driveData.id}&sz=w800`\n  },\n  binary: $input.item.binary\n}];"
+            },
+            "id": "node-set-drive-url",
+            "name": "Extract Drive URL",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                3580,
+                110
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Merge Drive URL data back with the original Claude-parsed article data\n// Pull Claude data from Parse Gemini Response node (the fully parsed JSON)\nconst driveInfo = $input.item.json;\nconst claudeData = $('Parse Gemini Response').item.json;\nreturn [{\n  json: {\n    ...claudeData,\n    drive_file_id: driveInfo.drive_file_id || driveInfo.id || '',\n    drive_view_url: driveInfo.drive_view_url || driveInfo.webViewLink || '',\n    drive_download_url: driveInfo.drive_download_url || driveInfo.webContentLink || '',\n    drive_direct_img: driveInfo.drive_direct_img || `https://drive.google.com/thumbnail?id=${driveInfo.id}&sz=w800`,\n    image_source: claudeData.image_source || 'ai_generated'\n  },\n  binary: $input.item.binary\n}];"
+            },
+            "id": "node-merge-drive-claude",
+            "name": "Merge Drive and Claude Data",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                3800,
+                110
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "create",
+                "base": {
+                    "value": "={{ $env.AIRTABLE_BASE_ID }}"
+                },
+                "table": {
+                    "value": "HYPERSCALER_BRIEFS"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Headline": "={{ $json.headline }}",
+                        "Summary": "={{ $json.summary }}",
+                        "Full_Article": "={{ $json.full_article }}",
+                        "Entity": "={{ $json.entity }}",
+                        "Type": "={{ $json.type }}",
+                        "Confidence": "={{ $json.confidence }}",
+                        "Subreddit": "={{ $json.subreddit }}",
+                        "Reddit_URL": "={{ $json.reddit_url }}",
+                        "Source_URL": "={{ $json.source_url }}",
+                        "Date": "={{ $json.date }}",
+                        "Drive_Image_URL": "={{ $json.drive_view_url }}",
+                        "Drive_Direct_IMG": "={{ $json.drive_direct_img }}",
+                        "LinkedIn_Post": "={{ $json.linkedin }}",
+                        "Facebook_Post": "={{ $json.facebook }}",
+                        "Status": "Ready to Post",
+                        "Image_Source": "={{ $json.image_source || 'ai_generated' }}"
+                    }
+                }
+            },
+            "id": "node-airtable-create",
+            "name": "Airtable Warehouse",
+            "type": "n8n-nodes-base.airtable",
+            "typeVersion": 2.1,
+            "position": [
+                4020,
+                110
+            ],
+            "credentials": {
+                "airtableTokenApi": {
+                    "id": "bXon4Q0NJZr2Hm1g",
+                    "name": "Airtable Personal Access Token account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "person": "={{ $env.LINKEDIN_PERSON_URN }}",
+                "text": "={{ $json.linkedin }}",
+                "shareMediaCategory": "IMAGE",
+                "binaryData": true,
+                "binaryPropertyName": "final_card"
+            },
+            "id": "node-post-linkedin",
+            "name": "Post LinkedIn",
+            "type": "n8n-nodes-base.linkedIn",
+            "typeVersion": 1,
+            "position": [
+                4240,
+                20
+            ]
+        },
+        {
+            "parameters": {
+                "httpRequestMethod": "POST",
+                "node": "={{ $env.FACEBOOK_PAGE_ID }}",
+                "edge": "photos",
+                "sendBinaryData": true,
+                "binaryPropertyName": "final_card",
+                "options": {
+                    "queryParameters": {
+                        "parameter": [
+                            {
+                                "name": "published",
+                                "value": "false"
+                            }
+                        ]
+                    }
+                }
+            },
+            "id": "node-facebook-upload-photo",
+            "name": "Facebook Upload Photo",
+            "type": "n8n-nodes-base.facebookGraphApi",
+            "typeVersion": 1,
+            "position": [
+                4240,
+                160
+            ]
+        },
+        {
+            "parameters": {
+                "httpRequestMethod": "POST",
+                "node": "={{ $env.FACEBOOK_PAGE_ID }}",
+                "edge": "feed",
+                "options": {
+                    "queryParameters": {
+                        "parameter": [
+                            {
+                                "name": "message",
+                                "value": "={{ $json.facebook }}"
+                            },
+                            {
+                                "name": "attached_media",
+                                "value": "=[{\"media_fbid\":\"{{ $('Facebook Upload Photo').item.json.id }}\"}]"
+                            }
+                        ]
+                    }
+                }
+            },
+            "id": "node-facebook-publish-post",
+            "name": "Facebook Publish Post",
+            "type": "n8n-nodes-base.facebookGraphApi",
+            "typeVersion": 1,
+            "position": [
+                4460,
+                160
+            ]
+        },
+        {
+            "parameters": {
+                "channel": "={{ $env.SLACK_CHANNEL || '#hyperscaler-man-posts' }}",
+                "text": "=*HYPERSCALER Posted:* {{ $json.headline }}\n{{ $json.entity }} | {{ $json.type }} | Confidence: {{ $json.confidence }}/10\n{{ $json.drive_view_url }}\nPosted to LinkedIn and Facebook"
+            },
+            "id": "node-success-notify",
+            "name": "Slack Success",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.1,
+            "position": [
+                4680,
+                160
+            ]
+        },
+        {
+            "parameters": {
+                "channel": "={{ $env.SLACK_CHANNEL || '#hyperscaler-man-posts' }}",
+                "text": "=*Skipped (low confidence):*\n{{ $json.headline || $json.title }}\nConfidence: {{ $json.confidence || 'N/A' }}/10\nReason: {{ $json._parse_error || 'Below threshold' }}"
+            },
+            "id": "node-low-conf-notify",
+            "name": "Slack Low Confidence",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.1,
+            "position": [
+                1160,
+                400
+            ]
+        },
+        {
+            "parameters": {},
+            "id": "node-noop-error",
+            "name": "Drop Parse Error",
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                940,
+                460
+            ]
+        },
+        {
+            "id": "sanitize-post-text-001",
+            "name": "Sanitize Post Text",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                740,
+                300
+            ],
+            "parameters": {
+                "jsCode": "const sanitize = (val) => {\n  if (val == null) return '';\n  return String(val)\n    .replace(/\\\\/g, '')\n    .replace(/\"/g, \"'\")\n    .replace(/\\n/g, ' ')\n    .replace(/\\r/g, '')\n    .replace(/\\t/g, ' ')\n    .replace(/[\\x00-\\x1F\\x7F]/g, '');\n};\n\nreturn [{\n  json: {\n    ...$input.item.json,\n    title:      sanitize($input.item.json.title),\n    text:       sanitize($input.item.json.text),\n    source_url: sanitize($input.item.json.source_url),\n    subreddit:  sanitize($input.item.json.subreddit),\n    reddit_url: sanitize($input.item.json.reddit_url),\n    date:       sanitize($input.item.json.date),\n  }\n}];"
+            }
+        },
+        {
+            "id": "has-article-text-001",
+            "name": "Has Article Text?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                390,
+                300
+            ],
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{ $json.text }}",
+                            "operation": "isNotEmpty"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fetch-article-content-001",
+            "name": "Fetch Article Content",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                560,
+                440
+            ],
+            "parameters": {
+                "jsCode": "const post = $input.item.json;\nconst firecrawlKey = $env.FIRECRAWL_API_KEY;\n\n// Skip crawling for Reddit galleries / raw images\nconst skipPatterns = ['i.redd.it', '/gallery/', 'reddit.com/r/'];\nconst shouldSkip = !post.source_url ||\n  skipPatterns.some(p => post.source_url.includes(p));\n\nlet articleText = '';\n\nif (!shouldSkip) {\n  try {\n    const res = await fetch('https://api.firecrawl.dev/v1/scrape', {\n      method: 'POST',\n      headers: {\n        'Authorization': `Bearer ${firecrawlKey}`,\n        'Content-Type': 'application/json'\n      },\n      body: JSON.stringify({\n        url: post.source_url,\n        formats: ['markdown'],\n        onlyMainContent: true\n      })\n    });\n    const data = await res.json();\n    const raw = data?.data?.markdown || data?.data?.content || '';\n    articleText = raw.substring(0, 3000);\n  } catch (e) {\n    articleText = '';\n  }\n}\n\nreturn [{ json: { ...post, text: articleText } }];\n"
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "const json = $input.item.json;\nreturn {\n  FINAL_SUMMARY: {\n    brand: \"HYPERSCALER\",\n    title: json.headline || json.title,\n    public_drive_url: json.drive_view_url || 'Checking GDrive...',\n    social_posting: \"LinkedIn/Facebook/Slack automation initiated.\",\n    image_source: json.image_source\n  }\n};"
+            },
+            "id": "node-final-summary",
+            "name": "Final Summary",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                4800,
+                110
+            ]
+        }
+    ],
+    "connections": {
+        "Schedule Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "List Subreddits",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Search Reddit Keywords",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "List Subreddits": {
+            "main": [
+                [
+                    {
+                        "node": "Fetch Subreddit Posts",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch Subreddit Posts": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Reddit Sources",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Search Reddit Keywords": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Reddit Sources",
+                        "type": "main",
+                        "index": 1
+                    }
+                ]
+            ]
+        },
+        "Merge Reddit Sources": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Dedupe and Rank",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Dedupe and Rank": {
+            "main": [
+                [
+                    {
+                        "node": "Has Article Text?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini Analysis": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Gemini Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Gemini Response": {
+            "main": [
+                [
+                    {
+                        "node": "Valid Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Valid Response": {
+            "main": [
+                [
+                    {
+                        "node": "Confidence Gate",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Drop Parse Error",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Confidence Gate": {
+            "main": [
+                [
+                    {
+                        "node": "Tavily Search",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Slack Low Confidence",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Tavily Search": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Image Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Merge Image Data": {
+            "main": [
+                [
+                    {
+                        "node": "Has Press Image",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Has Press Image": {
+            "main": [
+                [
+                    {
+                        "node": "Download Multi-References",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Prep WaveSpeed",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Download Multi-References": {
+            "main": [
+                [
+                    {
+                        "node": "Gemini Visual Designer",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini Visual Designer": {
+            "main": [
+                [
+                    {
+                        "node": "Prep WaveSpeed",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prep WaveSpeed": {
+            "main": [
+                [
+                    {
+                        "node": "WaveSpeed Seedream",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "WaveSpeed Seedream": {
+            "main": [
+                [
+                    {
+                        "node": "Normalize WaveSpeed Output",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Normalize WaveSpeed Output": {
+            "main": [
+                [
+                    {
+                        "node": "Set Final Binary",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Set Final Binary": {
+            "main": [
+                [
+                    {
+                        "node": "Debug Final Image",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Debug Final Image": {
+            "main": [
+                [
+                    {
+                        "node": "GDrive Upload",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "GDrive Upload": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Drive URL",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Drive URL": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Drive and Claude Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Merge Drive and Claude Data": {
+            "main": [
+                [
+                    {
+                        "node": "Airtable Warehouse",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Airtable Warehouse": {
+            "main": [
+                [
+                    {
+                        "node": "Post LinkedIn",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Facebook Upload Photo",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Post LinkedIn": {
+            "main": [
+                [
+                    {
+                        "node": "Slack Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Facebook Upload Photo": {
+            "main": [
+                [
+                    {
+                        "node": "Facebook Publish Post",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Facebook Publish Post": {
+            "main": [
+                [
+                    {
+                        "node": "Slack Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sanitize Post Text": {
+            "main": [
+                [
+                    {
+                        "node": "Gemini Analysis",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Has Article Text?": {
+            "main": [
+                [
+                    {
+                        "node": "Sanitize Post Text",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Fetch Article Content",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch Article Content": {
+            "main": [
+                [
+                    {
+                        "node": "Sanitize Post Text",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Slack Success": {
+            "main": [
+                [
+                    {
+                        "node": "Final Summary",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Slack Low Confidence": {
+            "main": [
+                [
+                    {
+                        "node": "Final Summary",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1",
+        "saveManualExecutions": true,
+        "callerPolicy": "workflowsFromSameOwner",
+        "errorWorkflow": "",
+        "timezone": "UTC"
+    },
+    "staticData": null,
+    "updatedAt": "2026-03-03T00:00:00.000Z",
+    "versionId": "v4.0.0",
+    "_FIXES_APPLIED": {
+        "FIX_1_SCHEDULE_TRIGGER": "Schedule Trigger now correctly fans out to both List Subreddits AND Search Reddit Keywords from a single output[0]. Previously had two outputs which scheduleTrigger does not support.",
+        "FIX_2_NODE_POSITIONS": "Filter Dedupe and Rank moved to [280,300] and Claude Analysis moved to [500,300] to eliminate the position overlap that caused UI connection confusion.",
+        "FIX_3_EXTRACT_DRIVE_URL": "Node no longer references $('Claude Analysis').item.json which was the raw API response. A new Merge Drive and Claude Data node properly combines Drive file metadata with Claude parsed content from Parse Gemini Response.",
+        "FIX_4_MERGE_DRIVE_CLAUDE_NODE": "Added new node between Extract Drive URL and Airtable to correctly merge Drive URLs with Claude article data so Airtable receives all fields.",
+        "FIX_5_FACEBOOK_SYNTAX": "Fixed $node[\"Facebook Upload Photo\"] to use correct $('Facebook Upload Photo').item.json.id syntax.",
+        "FIX_6_NO_BLACK_BACKGROUND": "Replaced solid black rect fills (#000000) in both Compose Card and SVG Fallback with deep navy gradient (0a1535 to 060d22) so the card has depth without a flat black panel.",
+        "FIX_7_NO_EMOJIS": "Claude Analysis prompt now explicitly instructs the model to produce no emojis in headline, summary, article, linkedin, or facebook outputs.",
+        "FIX_8_AIRTABLE_ENV_VAR": "Changed CONGRESS_AIRTABLE_BASE_ID reference to AIRTABLE_BASE_ID for consistency with setup guide.",
+        "FIX_9_SLACK_CHANNEL_NAME": "Removed space in Slack channel fallback from '#hyperscaler man-posts' to '#hyperscaler-man-posts' which is a valid Slack channel name format."
+    },
+    "_SETUP_GUIDE": {
+        "STEP_1_ENV_VARS": {
+            "ANTHROPIC_API_KEY": "Get from console.anthropic.com - used for Claude news analysis",
+            "GOOGLE_AI_API_KEY": "Get from aistudio.google.com - used for Imagen 3 image generation",
+            "TAVILY_API_KEY": "Get from tavily.com - used to find press images",
+            "GOOGLE_DRIVE_FOLDER_ID": "The ID from your GDrive folder URL: drive.google.com/drive/folders/THIS_PART",
+            "AIRTABLE_BASE_ID": "From airtable.com/appXXXXX - your base ID",
+            "LINKEDIN_PERSON_URN": "Format: urn:li:person:YOUR_PROFILE_ID",
+            "FACEBOOK_PAGE_ID": "Numeric ID of your Facebook Page",
+            "SLACK_CHANNEL": "#hyperscaler-man-posts (optional but recommended)",
+            "SHARP_WORKER_URL": "OPTIONAL: Your Cloudflare Worker URL for pixel-perfect PNG compositing. If blank, SVG fallback is used automatically.",
+            "SHARP_WORKER_SECRET": "OPTIONAL: Auth bearer token for your Sharp worker"
+        },
+        "STEP_2_CREDENTIALS": {
+            "Google Drive": "Add OAuth2 credential in n8n Settings > Credentials",
+            "Airtable": "Add Personal Access Token credential",
+            "LinkedIn": "Add OAuth2 credential - needs r_liteprofile and w_member_social scopes",
+            "Facebook": "Add credential with pages_manage_posts and pages_read_engagement",
+            "Slack": "Add OAuth2 or Bot Token credential"
+        },
+        "STEP_3_AIRTABLE_FIELDS": {
+            "table_name": "HYPERSCALER_BRIEFS",
+            "fields": [
+                "Headline",
+                "Summary",
+                "Full_Article",
+                "Entity",
+                "Type",
+                "Confidence",
+                "Subreddit",
+                "Reddit_URL",
+                "Source_URL",
+                "Date",
+                "Drive_Image_URL",
+                "Drive_Direct_IMG",
+                "LinkedIn_Post",
+                "Facebook_Post",
+                "Status",
+                "Image_Source"
+            ]
+        },
+        "STEP_4_SHARP_WORKER_OPTIONAL": {
+            "note": "For pixel-perfect PNG compositing deploy a Cloudflare Worker with Sharp. The worker should accept base_image_b64 and svg_overlay_b64, resize the image to 800x650, overlay the SVG on a 800x1000 canvas, and return the final PNG binary.",
+            "without_worker": "If SHARP_WORKER_URL is empty the workflow automatically uses SVG Fallback which produces a valid SVG card accepted by most platforms."
+        },
+        "CARD_STYLE": {
+            "format": "800x1000px vertical card",
+            "top_section": "Full photo or AI-generated image 800x650",
+            "bottom_section": "Deep navy gradient overlay - no solid black",
+            "left_bar": "5px electric blue #1a9fff accent bar full height",
+            "separator": "HYPERSCALER text with lines on both sides",
+            "headline": "Barlow Condensed 900 weight 70px ALL CAPS alternating blue and off-white words",
+            "badge": "Top-right colored badge showing content type",
+            "headline_colors": "Blue #1a9fff for even-indexed words and named entities, off-white #e8eaf0 for odd-indexed words"
+        }
+    }
+}
