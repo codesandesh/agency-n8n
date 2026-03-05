@@ -1,0 +1,460 @@
+{
+    "id": "3",
+    "name": "reedit-news-scrap",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "hours",
+                            "hoursInterval": 24
+                        }
+                    ]
+                }
+            },
+            "id": "cron-trigger-001",
+            "name": "Schedule Trigger (Daily)",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                0,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Build today's date and configure COMPREHENSIVE AI subreddits\nconst today = new Date();\nconst dateStr = today.toISOString().split('T')[0];\nconst timestamp = today.toISOString();\n\n// Final Curated list: Research, LLMs, Agents, NLP, CV, and Data Science\nconst subreddits = [\n  {\n    \"name\": \"singularity\",\n    \"category\": \"AGI & Future AI\",\n    \"minUpvotes\": 200\n  },\n  {\n    \"name\": \"artificial\",\n    \"category\": \"AI General\",\n    \"minUpvotes\": 150\n  },\n  {\n    \"name\": \"ArtificialInteligence\",\n    \"category\": \"AI General\",\n    \"minUpvotes\": 100\n  },\n  {\n    \"name\": \"MachineLearning\",\n    \"category\": \"ML Research\",\n    \"minUpvotes\": 200\n  },\n  {\n    \"name\": \"DeepLearning\",\n    \"category\": \"ML Research\",\n    \"minUpvotes\": 100\n  },\n  {\n    \"name\": \"learnmachinelearning\",\n    \"category\": \"ML Learning\",\n    \"minUpvotes\": 50\n  },\n  {\n    \"name\": \"MLQuestions\",\n    \"category\": \"ML Learning\",\n    \"minUpvotes\": 30\n  },\n  {\n    \"name\": \"LanguageTechnology\",\n    \"category\": \"NLP & LangTech\",\n    \"minUpvotes\": 40\n  },\n  {\n    \"name\": \"computervision\",\n    \"category\": \"Computer Vision\",\n    \"minUpvotes\": 50\n  },\n  {\n    \"name\": \"NeuralNetworks\",\n    \"category\": \"ML Research\",\n    \"minUpvotes\": 50\n  },\n  {\n    \"name\": \"DataScience\",\n    \"category\": \"Data Science\",\n    \"minUpvotes\": 150\n  },\n  {\n    \"name\": \"algorithms\",\n    \"category\": \"Computer Science\",\n    \"minUpvotes\": 50\n  },\n  {\n    \"name\": \"ChatGPT\",\n    \"category\": \"LLM Products\",\n    \"minUpvotes\": 300\n  },\n  {\n    \"name\": \"OpenAI\",\n    \"category\": \"LLM Tech\",\n    \"minUpvotes\": 150\n  },\n  {\n    \"name\": \"ClaudeAI\",\n    \"category\": \"LLM Tech\",\n    \"minUpvotes\": 100\n  },\n  {\n    \"name\": \"LocalLLaMA\",\n    \"category\": \"Local LLMs\",\n    \"minUpvotes\": 100\n  },\n  {\n    \"name\": \"AgenticAI\",\n    \"category\": \"Agentic AI\",\n    \"minUpvotes\": 30\n  },\n  {\n    \"name\": \"AutoGPT\",\n    \"category\": \"Agentic AI\",\n    \"minUpvotes\": 50\n  },\n  {\n    \"name\": \"AI_Agents\",\n    \"category\": \"Agentic AI\",\n    \"minUpvotes\": 40\n  },\n  {\n    \"name\": \"LangChain\",\n    \"category\": \"Agentic Frameworks\",\n    \"minUpvotes\": 50\n  },\n  {\n    \"name\": \"LlamaIndex\",\n    \"category\": \"Agentic Frameworks\",\n    \"minUpvotes\": 50\n  },\n  {\n    \"name\": \"CrewAI\",\n    \"category\": \"Agentic Frameworks\",\n    \"minUpvotes\": 30\n  }\n];\n\nconst startUrls = [];\nconst subConfig = {};\nfor (const sub of subreddits) {\n  startUrls.push({ url: `https://www.reddit.com/r/${sub.name}/top/?t=day` });\n  subConfig[sub.name.toLowerCase()] = { \n    category: sub.category, \n    minUpvotes: sub.minUpvotes\n  };\n}\n\nreturn [{\n  json: {\n    startUrls,\n    subConfig,\n    runDate: dateStr,\n    runTimestamp: timestamp,\n    gsheetIdPosts: $env.GOOGLE_SHEET_ID_POSTS,\n    gsheetNamePosts: $env.GOOGLE_SHEET_NAME_POSTS,\n    gsheetIdSummary: $env.GOOGLE_SHEET_ID_SUMMARY,\n    gsheetNameSummary: $env.GOOGLE_SHEET_NAME_SUMMARY\n  }\n}];"
+            },
+            "id": "code-config-002",
+            "name": "Configure Subreddits",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                220,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://api.apify.com/v2/acts/trudax~reddit-scraper-lite/runs?token={{ $env.APIFY_API_TOKEN }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ startUrls: $json.startUrls, maxItems: 150, skipComments: true, maxComments: 0, maxCommunitiesCount: 50, maxPostCount: 15, proxy: { useApifyProxy: true } }) }}",
+                "options": {}
+            },
+            "id": "node-start-scraper",
+            "name": "Start Reddit Scraper",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                440,
+                300
+            ],
+            "onError": "continueRegular"
+        },
+        {
+            "parameters": {
+                "amount": 60
+            },
+            "id": "node-wait-reddit",
+            "name": "Wait 10s",
+            "type": "n8n-nodes-base.wait",
+            "typeVersion": 1,
+            "position": [
+                660,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "=https://api.apify.com/v2/actor-runs/{{ $node[\"Start Reddit Scraper\"].json.data.id }}?token={{ $env.APIFY_API_TOKEN }}",
+                "options": {}
+            },
+            "id": "node-check-status-reddit",
+            "name": "Check Scraper Status",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                880,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "string": [
+                        {
+                            "value1": "={{ $json.data.status }}",
+                            "value2": "SUCCEEDED"
+                        }
+                    ]
+                }
+            },
+            "id": "node-is-finished-reddit",
+            "name": "Is Scraper Finished?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                1100,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "=https://api.apify.com/v2/datasets/{{ $node[\"Check Scraper Status\"].json.data.defaultDatasetId }}/items?token={{ $env.APIFY_API_TOKEN }}",
+                "options": {}
+            },
+            "id": "node-fetch-results-reddit",
+            "name": "Fetch Scraper Results",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1320,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Filter & enrich posts \u2014 AGENTIC AI focus only\nconst items = $input.all();\nconst results = [];\n\nconst subConfig = $node[\"Configure Subreddits\"].json.subConfig;\n\n// Agentic AI keyword groups for classification\nconst KEYWORD_MAP = {\n  'Agentic AI':        ['agent', 'agentic', 'autonomous agent', 'multi-agent', 'autogpt', 'agentgpt', 'crewai', 'crew ai', 'openagents', 'superagent', 'babyagi', 'agent loop', 'tool use', 'function calling'],\n  'LLM / Foundation':  ['llm', 'large language model', 'gpt-4', 'gpt-5', 'gpt4', 'gpt5', 'claude', 'gemini', 'llama', 'mistral', 'falcon', 'phi-', 'qwen', 'foundation model', 'transformer', 'fine-tun'],\n  'RAG / Memory':      ['rag', 'retrieval augmented', 'vector db', 'vector store', 'embedding', 'long context', 'memory', 'knowledge graph', 'pinecone', 'weaviate', 'chroma', 'faiss'],\n  'Agentic Frameworks':['langchain', 'langgraph', 'llamaindex', 'llama index', 'autogen', 'semantic kernel', 'haystack', 'dspy', 'smolagents', 'pydantic ai', 'agno', 'n8n', 'workflow automation'],\n  'AI Tools & APIs':   ['openai api', 'anthropic api', 'tool calling', 'mcp', 'model context protocol', 'function call', 'plugin', 'copilot', 'code gen', 'codegen', 'cursor', 'devin', 'swe-agent'],\n  'AGI / Research':    ['agi', 'artificial general intelligence', 'alignment', 'safety', 'reinforcement learning', 'rlhf', 'rlaif', 'reasoning', 'chain of thought', 'cot', 'o1', 'o3', 'deep research'],\n  'AI Infra / Ops':    ['inference', 'gpu', 'mlops', 'deployment', 'serving', 'quantization', 'gguf', 'ollama', 'vllm', 'triton', 'edge ai', 'on-device']\n};\n\nconst ALL_KEYWORDS = Object.values(KEYWORD_MAP).flat();\n\nfunction classifyPost(title, flair) {\n  const text = (title + ' ' + (flair || '')).toLowerCase();\n  for (const [category, keywords] of Object.entries(KEYWORD_MAP)) {\n    if (keywords.some(kw => text.includes(kw))) return category;\n  }\n  return 'AI General';\n}\n\nfunction isAgenticAIRelevant(title, flair) {\n  const text = (title + ' ' + (flair || '')).toLowerCase();\n  return ALL_KEYWORDS.some(kw => text.includes(kw)) ||\n    text.includes(' ai ') || text.includes('artificial intelligence') ||\n    text.includes('machine learning') || text.includes('neural') ||\n    text.includes('chatbot') || text.includes('chatgpt') || text.includes('claude') ||\n    text.includes('openai') || text.includes('anthropic') || text.includes('deepmind') ||\n    text.includes('mistral') || text.includes('cohere') || text.includes('hugging face');\n}\n\nfor (const item of items) {\n  const post = item.json;\n  if (!post.title || !post.url) continue;\n\n  const subLookup = post.subreddit?.toLowerCase() || '';\n  const config = subConfig[subLookup] || { category: 'AI General', minUpvotes: 1 };\n\n  const upvotes = post.score || post.ups || 0;\n  // if (upvotes < config.minUpvotes) continue; // DISABLED FOR TESTING\n\n  // if (!isAgenticAIRelevant(post.title, post.linkFlairText || post.link_flair_text || '')) continue; // DISABLED FOR TESTING\n\n  const comments   = post.numComments || post.num_comments || 0;\n  const upvoteRatio = post.upvoteRatio || post.upvote_ratio || 0.5;\n  const engagementScore = Math.round((upvotes * upvoteRatio) + (comments * 5));\n\n  const createdAt = post.createdAt || post.created_utc;\n  const postDate  = createdAt ? new Date(typeof createdAt === 'number' ? createdAt * 1000 : createdAt) : new Date();\n  const hoursAgo  = Math.round((Date.now() - postDate.getTime()) / (1000 * 60 * 60));\n\n  let trendingLevel = '\ud83d\udfe2 Normal';\n  if      (upvotes >= 5000) trendingLevel = '\ud83d\udd25 Viral';\n  else if (upvotes >= 2000) trendingLevel = '\u2b06\ufe0f Hot';\n  else if (upvotes >= 500)  trendingLevel = '\ud83d\udcc8 Rising';\n\n  let domain = 'reddit.com';\n  try { domain = new URL(post.url).hostname.replace('www.', ''); } catch(e) {}\n\n  const aiCategory = config.category || classifyPost(post.title, post.linkFlairText || post.link_flair_text || '');\n  const postType   = (post.isSelf || post.is_self) ? 'Discussion' : 'Link';\n\n  results.push({ json: {\n    title:          post.title,\n    url:            post.url,\n    redditUrl:      `https://reddit.com${post.permalink || ''}`,\n    subreddit:      post.subreddit || post.communityName || '',\n    aiCategory:     aiCategory,\n    author:         post.author || post.username || 'unknown',\n    upvotes:        upvotes,\n    upvoteRatio:    upvoteRatio,\n    commentCount:   comments,\n    engagementScore: engagementScore,\n    trendingLevel:  trendingLevel,\n    postType:       postType,\n    domain:         domain,\n    postAge_hours:  hoursAgo,\n    postedAt:       postDate.toISOString(),\n    scrapedAt:      new Date().toISOString(),\n    flair:          post.linkFlairText || post.link_flair_text || '',\n    awards:         post.totalAwardsReceived || post.total_awards_received || 0,\n    body:           (post.body || post.selftext || '').substring(0, 2000),\n    articleLink:    post.link || post.url || ''\n  }});\n}\n\nresults.sort((a, b) => b.json.engagementScore - a.json.engagementScore);\nreturn results;"
+            },
+            "id": "code-filter-005",
+            "name": "Filter & Enrich Posts",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1540,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Analyse Agentic AI news trends\nconst items = $input.all();\n\nif (items.length === 0) {\n  return [{ json: { analysisSkipped: true, message: 'No Agentic AI posts found today' } }];\n}\n\nconst byCategory = {};\nconst bySubreddit = {};\nconst domainFrequency = {};\nlet totalUpvotes = 0;\nlet totalComments = 0;\n\nfor (const item of items) {\n  const post = item.json;\n\n  const cat = post.aiCategory || 'AI General';\n  if (!byCategory[cat]) byCategory[cat] = [];\n  byCategory[cat].push(post);\n\n  const sub = post.subreddit;\n  if (!bySubreddit[sub]) bySubreddit[sub] = [];\n  bySubreddit[sub].push(post);\n\n  domainFrequency[post.domain] = (domainFrequency[post.domain] || 0) + 1;\n  totalUpvotes  += post.upvotes;\n  totalComments += post.commentCount;\n}\n\nconst topSources = Object.entries(domainFrequency)\n  .sort((a, b) => b[1] - a[1]).slice(0, 10)\n  .map(([domain, count]) => ({ domain, count }));\n\nconst viralPosts = items.map(i => i.json)\n  .sort((a, b) => b.upvotes - a.upvotes).slice(0, 5);\n\nconst categoryBreakdown = Object.entries(byCategory).map(([cat, posts]) => ({\n  category: cat,\n  postCount: posts.length,\n  avgUpvotes: Math.round(posts.reduce((s, p) => s + p.upvotes, 0) / posts.length),\n  topPost: posts.sort((a,b) => b.upvotes - a.upvotes)[0]?.title || ''\n}));\n\nconst stopwords = new Set(['the','a','an','and','or','for','in','of','to','is','are','was','with','on','at','by','from','how','what','why','this','that','it','be','as','its','i']);\nconst wordFreq = {};\nfor (const item of items) {\n  const words = item.json.title.toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(' ');\n  for (const w of words) {\n    if (w.length > 3 && !stopwords.has(w)) {\n      wordFreq[w] = (wordFreq[w] || 0) + 1;\n    }\n  }\n}\nconst hotTopics = Object.entries(wordFreq)\n  .sort((a,b) => b[1]-a[1]).slice(0,15)\n  .map(([word, count]) => `${word}(${count})`).join(', ');\n\nconst summary = {\n  analysisDate:        new Date().toISOString().split('T')[0],\n  totalPostsAnalyzed:  items.length,\n  totalCategories:     Object.keys(byCategory).length,\n  totalSubreddits:     Object.keys(bySubreddit).length,\n  avgUpvotes:          Math.round(totalUpvotes / items.length),\n  avgComments:         Math.round(totalComments / items.length),\n  topSources:          JSON.stringify(topSources),\n  hotTopicsToday:      hotTopics,\n  viralPostTitles:     viralPosts.map(p => p.title).join(' | '),\n  viralPostUrls:       viralPosts.map(p => p.url).join(' | '),\n  categoryBreakdown:   JSON.stringify(categoryBreakdown),\n  subredditBreakdown:  JSON.stringify(\n    Object.entries(bySubreddit).map(([sub, posts]) => ({\n      subreddit: sub,\n      postCount: posts.length,\n      avgUpvotes: Math.round(posts.reduce((s, p) => s + p.upvotes, 0) / posts.length)\n    }))\n  )\n};\n\nconst output = items.map((item, idx) => ({\n  json: { ...item.json, _summary: idx === 0 ? summary : null }\n}));\n\nreturn output;"
+            },
+            "id": "code-analyse-006",
+            "name": "Analyse News Trends",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1760,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "append",
+                "documentId": {
+                    "__rl": true,
+                    "value": "={{ $node[\"Configure Subreddits\"].json.gsheetIdPosts }}",
+                    "mode": "id"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "={{ $node[\"Configure Subreddits\"].json.gsheetNamePosts }}",
+                    "mode": "name"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Status": "✅ Approved",
+                        "Date": "={{$json.scrapedAt.split('T')[0]}}",
+                        "Time Scraped": "={{$json.scrapedAt}}",
+                        "Subreddit": "={{$json.subreddit}}",
+                        "AI Category": "={{$json.aiCategory}}",
+                        "Title": "={{$json.title}}",
+                        "URL": "={{$json.url}}",
+                        "Reddit Link": "={{$json.redditUrl}}",
+                        "Author": "={{$json.author}}",
+                        "Upvotes": "={{$json.upvotes}}",
+                        "Upvote Ratio %": "={{Math.round($json.upvoteRatio * 100)}}",
+                        "Comments": "={{$json.commentCount}}",
+                        "Engagement Score": "={{$json.engagementScore}}",
+                        "Trending Level": "={{$json.trendingLevel}}",
+                        "Post Type": "={{$json.postType}}",
+                        "Domain / Source": "={{$json.domain}}",
+                        "Post Age (hrs)": "={{$json.postAge_hours}}",
+                        "Posted At": "={{$json.postedAt}}",
+                        "Flair": "={{$json.flair}}",
+                        "Awards": "={{$json.awards}}",
+                        "Body": "={{$json.body}}",
+                        "Article Link": "={{$json.articleLink}}"
+                    }
+                },
+                "options": {
+                    "handlingExistingData": "append"
+                }
+            },
+            "id": "gsheet-posts-007",
+            "name": "Save Posts to Google Sheet",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4,
+            "position": [
+                1980,
+                180
+            ],
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "name": "Google Sheets account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": false,
+                        "leftValue": "",
+                        "typeValidation": "none"
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{$json._summary}}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-summary-008",
+            "name": "Has Summary?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                1980,
+                420
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "appendOrUpdate",
+                "documentId": {
+                    "__rl": true,
+                    "value": "={{ $node[\"Configure Subreddits\"].json.gsheetIdSummary }}",
+                    "mode": "id"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "={{ $node[\"Configure Subreddits\"].json.gsheetNameSummary }}",
+                    "mode": "name"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Date": "={{$json._summary.analysisDate}}",
+                        "Total Posts": "={{$json._summary.totalPostsAnalyzed}}",
+                        "Categories Found": "={{$json._summary.totalCategories}}",
+                        "Subreddits Covered": "={{$json._summary.totalSubreddits}}",
+                        "Avg Upvotes": "={{$json._summary.avgUpvotes}}",
+                        "Avg Comments": "={{$json._summary.avgComments}}",
+                        "Hot Topics Today": "={{$json._summary.hotTopicsToday}}",
+                        "Top News Sources": "={{$json._summary.topSources}}",
+                        "Viral Post Titles": "={{$json._summary.viralPostTitles}}",
+                        "Viral Post URLs": "={{$json._summary.viralPostUrls}}",
+                        "Category Breakdown": "={{$json._summary.categoryBreakdown}}",
+                        "Subreddit Breakdown": "={{$json._summary.subredditBreakdown}}"
+                    },
+                    "matchingColumns": [
+                        "Date"
+                    ]
+                },
+                "options": {
+                    "handlingExistingData": "append"
+                }
+            },
+            "id": "gsheet-summary-009",
+            "name": "Save Daily Summary to Sheet",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4,
+            "position": [
+                2200,
+                420
+            ],
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "name": "Google Sheets account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Final report: log completion status\nconst items = $input.all();\nconst savedCount = items.length;\n\nconsole.log(`\u2705 Reddit News Scrape Complete`);\nconsole.log(`\ud83d\udcca Posts saved: ${savedCount}`);\nconsole.log(`\ud83d\udcc5 Run date: ${new Date().toISOString()}`);\n\nreturn [{\n  json: {\n    status: 'success',\n    postsSaved: savedCount,\n    completedAt: new Date().toISOString(),\n    message: `Reddit news scrape completed. ${savedCount} posts saved to Google Sheets.`\n  }\n}];"
+            },
+            "id": "code-complete-010",
+            "name": "Log Completion",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2420,
+                180
+            ]
+        }
+    ],
+    "connections": {
+        "Schedule Trigger (Daily)": {
+            "main": [
+                [
+                    {
+                        "node": "Configure Subreddits",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Configure Subreddits": {
+            "main": [
+                [
+                    {
+                        "node": "Start Reddit Scraper",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Start Reddit Scraper": {
+            "main": [
+                [
+                    {
+                        "node": "Wait 10s",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Wait 10s": {
+            "main": [
+                [
+                    {
+                        "node": "Check Scraper Status",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Scraper Status": {
+            "main": [
+                [
+                    {
+                        "node": "Is Scraper Finished?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Is Scraper Finished?": {
+            "main": [
+                [
+                    {
+                        "node": "Fetch Scraper Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Wait 10s",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch Scraper Results": {
+            "main": [
+                [
+                    {
+                        "node": "Filter & Enrich Posts",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter & Enrich Posts": {
+            "main": [
+                [
+                    {
+                        "node": "Analyse News Trends",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Analyse News Trends": {
+            "main": [
+                [
+                    {
+                        "node": "Save Posts to Google Sheet",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Has Summary?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save Posts to Google Sheet": {
+            "main": [
+                [
+                    {
+                        "node": "Log Completion",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Has Summary?": {
+            "main": [
+                [
+                    {
+                        "node": "Save Daily Summary to Sheet",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "settings": {
+        "executionOrder": "v1",
+        "saveManualExecutions": true,
+        "callerPolicy": "workflowsFromSameOwner",
+        "errorWorkflow": ""
+    },
+    "staticData": null,
+    "tags": [
+        {
+            "createdAt": "2026-03-05T00:00:00.000Z",
+            "updatedAt": "2026-03-05T00:00:00.000Z",
+            "id": "tag-agentic-ai",
+            "name": "agentic-ai"
+        }
+    ],
+    "triggerCount": 1,
+    "updatedAt": "2026-03-05T00:00:00.000Z",
+    "versionId": "reedit-news-scrap-v4-http-lite"
+}
