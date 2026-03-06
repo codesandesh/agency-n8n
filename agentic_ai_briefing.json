@@ -7,7 +7,11 @@
                     "interval": [
                         {
                             "field": "hours",
-                            "hoursInterval": 6
+                            "hoursInterval": 24
+                        },
+                        {
+                            "field": "hours",
+                            "hoursInterval": 2
                         }
                     ]
                 }
@@ -40,7 +44,7 @@
                 },
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": `You are the Lead Editor for HYPERSCALER. Analyze this news item from Reddit/Web.\n\nTitle: ${$json.title}\nContent: ${$json.text}\nScore: ${$json.original_score}\nURL: ${$json.source_url}\n\nTASK 1: Curation\nDetermine if this is highly relevant to Agentic AI (Agents, LLM Workflows, Autonomy, Tool-use Frameworks, etc.).\n\nTASK 2: Real News Headline Generation\nWrite a headline exactly like a real tech news editor would write it. The headline must tell the full story at a glance — who did what, and what makes it notable.\n\nGOOD EXAMPLES:\n- \"French Engineers Develop a Highly Stable Omnidirectional Drone That Reaches 124 mph\"\n- \"Anthropic Is Now Offering Free AI Courses With Certificates at Zero Cost\"\n- \"OpenAI Launches SearchGPT to Directly Challenge Google Search\"\n- \"Meta Releases Open-Source AI Model That Outperforms GPT-4 on Key Benchmarks\"\n\nBAD EXAMPLES (do NOT do this):\n- \"OPENAI RELEASES SEARCHGPT\" (too vague, no detail)\n- \"AI DRONE SYSTEM\" (not a sentence, tells nothing)\n- \"REVOLUTIONARY AI BREAKTHROUGH\" (fluff, meaningless)\n\nRULES FOR HEADLINES:\n- Format: Title Case (capitalize main words), NOT all caps.\n- Length: 10 to 18 words — long enough to be specific, short enough to be punchy.\n- Must include: WHO (company/person/team), WHAT they did, and WHY it matters or WHAT makes it notable (a number, a price, a comparison, a specific feature).\n- Factual: Must be 100% grounded in the source content — do not invent or exaggerate.\n- Plain English: No fluff words like Amazing, Revolutionary, Game-changing, Groundbreaking, Industry-leading.\n- Clarity: A reader must understand the full story from the headline alone, with zero additional context.\n\nRULES FOR HIGHLIGHTS:\n- Select 3 to 5 of the most impactful individual WORDS from the headline to highlight in Cyan #00D4FF.\n- WHAT TO HIGHLIGHT: Proper nouns (person names, company names, product names), numbers/amounts ($100M, GPT-5, 124mph), key technical terms (GPU, AGI, LLM, API).\n- Each entry in headline_highlights must be a SINGLE WORD exactly as it appears in the headline (e.g. \"SAM\", \"ALTMAN\", \"GPT-5\", \"ANTHROPIC\", \"$2B\").\n- If a name has two words (Sam Altman), include BOTH separately: [\"SAM\", \"ALTMAN\"].\n- DO NOT highlight: verbs (Launches, Releases, Beats, Builds), prepositions (For, In, With, On, At), articles (A, An, The), conjunctions (And, Or, But), generic words (New, Now, Just).\n- GOOD: headline \"Sam Altman Launches GPT-5 That Beats Claude for $20\" → [\"SAM\", \"ALTMAN\", \"GPT-5\", \"CLAUDE\", \"$20\"]\n- BAD: [\"LAUNCHES\", \"THAT\", \"FOR\"] — never highlight verbs or prepositions.\n\nRULES FOR CONTENT:\n- summary: 1-2 sentence professional overview.\n- full_article: 3-4 paragraph technical analysis.\n- image_prompt: Describe a SCENE that visually tells the news story — like a movie still or editorial photo. Think: what is the most compelling visual moment from this news? SCENE EXAMPLES by news type:\n- AI model launch → person reacting with wide-eyed excitement staring at a glowing laptop screen showing the AI interface\n- Hacking/security → dark hooded figure hunched over multiple monitors filled with scrolling code\n- GPU/hardware launch → engineer or CEO holding the physical chip/GPU card up, clean studio background\n- Research paper → scientist at whiteboard covered in diagrams, lab environment\n- Funding/deal → handshake in a modern glass office, city skyline behind\n- Country policy → official at a podium or government building exterior\n- Robot/automation → robot arm or humanoid robot in a factory or lab setting\nScene must have: a clear subject (person or object), meaningful background context, natural props related to the story. Cinestill 800t film style. No floating text labels or captions. Natural screen/console content (blurred code, terminal output) is fine. Company logo may appear naturally on products, screens, or walls. Purely visual storytelling.\n- image_search_query: A precise search query to find a REAL press photo of the specific person or subject. RULES: Always include the person's full name if known (e.g. 'Sam Altman OpenAI CEO portrait'). For persons: '[Full Name] [title/company] press photo portrait'. For companies: '[Company Name] [CEO full name] interview'. For products/tech: '[product name] real photo hands-on'. For countries: '[Country] [specific event or topic] news photo'. NEVER use generic terms like 'AI technology' or 'artificial intelligence concept' — always be name-specific.\n- linkedin: Professional post text.\n- facebook: Casual post text.\n- is_agentic_relevant: boolean.\n- confidence: 1-10.\n\n\\\\n\\\\nRULES FOR SUBJECT IDENTIFICATION:\\\\n- subject_type: \\\"person\\\" if about a specific individual; \\\"company\\\" if about an organization, brand, model, or product; \\\"country\\\" if about a nation or government.\\\\n- subject_name: The PRIMARY brand/entity name. For persons → their COMPANY name (e.g., Sam Altman → \\\"Anthropic\\\"). For companies/models → the company (e.g., GPT-5 → \\\"OpenAI\\\", Claude → \\\"Anthropic\\\", Gemini → \\\"Google\\\"). For frameworks → the framework (e.g., \\\"LangChain\\\", \\\"NVIDIA\\\"). For countries → country name.\\\\n- company_domain: The official website domain of the primary company/brand (e.g. \\\"microsoft.com\\\", \\\"anthropic.com\\\", \\\"openai.com\\\", \\\"nvidia.com\\\", \\\"google.com\\\", \\\"meta.com\\\"). For countries use empty string.\\\\n- logo_search_query: ALWAYS required — every news item has a brand. Rules:\\\\n  • AI model (GPT, Claude, Gemini, Llama): \\\"[creator company] logo transparent PNG\\\" (e.g. \\\"OpenAI logo PNG transparent\\\")\\\\n  • Company or startup: \\\"[company name] logo transparent PNG white background\\\"\\\\n  • Person (CEO, researcher): \\\"[their company name] logo transparent PNG\\\"\\\\n  • AI framework (LangChain, LlamaIndex, AutoGen): \\\"[framework name] logo transparent PNG\\\"\\\\n  • Hardware/chip (NVIDIA GPU, Apple Silicon): \\\"[brand name] logo transparent PNG\\\"\\\\n  • Country or government: \\\"[country name] flag PNG\\\" or \\\"[country name] map silhouette\\\"\\\\n  • Generic AI news: \\\"artificial intelligence logo PNG\\\"\\\\n\\\\nReturn ONLY valid JSON:\n{\n  \"is_agentic_relevant\": true,\n  \"headline\": \"...\",\n  \"headline_highlights\": [...],\n  \"summary\": \"...\",\n  \"full_article\": \"...\",\n  \"image_prompt\": \"...\",\n  \"image_search_query\": \"...\",\n  \"linkedin\": \"...\",\n  \"facebook\": \"...\",\n  \"source_url\": \"${$json.source_url}\",\n  \"subreddit\": \"${$json.subreddit}\",\n  \"reddit_url\": \"${$json.reddit_url}\",\n  \"date\": \"${$json.date}\",\n  \"row_number\": ${$json.row_number},\n  \"confidence\": 8\n}`\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"maxOutputTokens\": 4096,\n    \"temperature\": 0.4\n  }\n}) }}",
+                "jsonBody": "={{ JSON.stringify({\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": `You are the Lead Editor for HYPERSCALER. Analyze this news item from Reddit/Web.\n\nTitle: ${$json.title}\nContent: ${$json.text}\nScore: ${$json.original_score}\nURL: ${$json.source_url}\n\nTASK 1: Curation\nDetermine if this is highly relevant to Agentic AI (Agents, LLM Workflows, Autonomy, Tool-use Frameworks, etc.).\n\nTASK 2: Real News Headline Generation\nWrite a headline exactly like a real tech news editor would write it. The headline must tell the full story at a glance \u2014 who did what, and what makes it notable.\n\nGOOD EXAMPLES:\n- \"French Engineers Develop a Highly Stable Omnidirectional Drone That Reaches 124 mph\"\n- \"Anthropic Is Now Offering Free AI Courses With Certificates at Zero Cost\"\n- \"OpenAI Launches SearchGPT to Directly Challenge Google Search\"\n- \"Meta Releases Open-Source AI Model That Outperforms GPT-4 on Key Benchmarks\"\n\nBAD EXAMPLES (do NOT do this):\n- \"OPENAI RELEASES SEARCHGPT\" (too vague, no detail)\n- \"AI DRONE SYSTEM\" (not a sentence, tells nothing)\n- \"REVOLUTIONARY AI BREAKTHROUGH\" (fluff, meaningless)\n\nRULES FOR HEADLINES:\n- Format: Title Case (capitalize main words), NOT all caps.\n- Length: 10 to 18 words \u2014 long enough to be specific, short enough to be punchy.\n- Must include: WHO (company/person/team), WHAT they did, and WHY it matters or WHAT makes it notable (a number, a price, a comparison, a specific feature).\n- Factual: Must be 100% grounded in the source content \u2014 do not invent or exaggerate.\n- Plain English: No fluff words like Amazing, Revolutionary, Game-changing, Groundbreaking, Industry-leading.\n- Clarity: A reader must understand the full story from the headline alone, with zero additional context.\n\nRULES FOR HIGHLIGHTS:\n- Select 5 to 8 of the most impactful individual WORDS from the headline to highlight in Cyan #00D4FF.\n- WHAT TO HIGHLIGHT: Proper nouns (person names, company names, product names), numbers/amounts ($100M, GPT-5, 124mph), key technical terms (GPU, AGI, LLM, API), strong action verbs (Warns, Beats, Builds, Outperforms, Bans, Cuts, Surpasses), key adjectives (Compact, Open-Source, Free, Fastest), and any notable descriptor from the headline.\n- Each entry in headline_highlights must be a SINGLE WORD exactly as it appears in the headline (e.g. \"SAM\", \"ALTMAN\", \"GPT-5\", \"ANTHROPIC\", \"$2B\").\n- If a name has two words (Sam Altman), include BOTH separately: [\"SAM\", \"ALTMAN\"].\n- DO NOT highlight: prepositions (For, In, With, On, At, To, By, From), articles (A, An, The), conjunctions (And, Or, But, That, Which), filler words (Now, Just, Also, Only, More).\n- GOOD: headline \"Sam Altman Launches GPT-5 That Beats Claude for $20\" \u2192 [\"SAM\", \"ALTMAN\", \"GPT-5\", \"CLAUDE\", \"$20\"]\n- BAD: [\"LAUNCHES\", \"THAT\", \"FOR\"] \u2014 never highlight verbs or prepositions.\n\nRULES FOR CONTENT:\n- summary: 1-2 sentence professional overview.\n- full_article: 3-4 paragraph technical analysis.\n- image_prompt: Describe a SCENE that visually tells the news story \u2014 like a movie still or editorial photo. Think: what is the most compelling visual moment from this news? SCENE EXAMPLES by news type:\n- AI model launch \u2192 person reacting with wide-eyed excitement staring at a glowing laptop screen showing the AI interface\n- Hacking/security \u2192 dark hooded figure hunched over multiple monitors filled with scrolling code\n- GPU/hardware launch \u2192 engineer or CEO holding the physical chip/GPU card up, clean studio background\n- Research paper \u2192 scientist at whiteboard covered in diagrams, lab environment\n- Funding/deal \u2192 handshake in a modern glass office, city skyline behind\n- Country policy \u2192 official at a podium or government building exterior\n- Robot/automation \u2192 robot arm or humanoid robot in a factory or lab setting\nScene must have: a clear subject (person or object), meaningful background context, natural props related to the story. Cinestill 800t film style. No floating text labels or captions. Natural screen/console content (blurred code, terminal output) is fine. Company logo may appear naturally on products, screens, or walls. Purely visual storytelling.\n- image_search_query: A precise search query to find a REAL press photo of the specific person or subject. RULES: Always include the person's full name if known (e.g. 'Sam Altman OpenAI CEO portrait'). For persons: '[Full Name] [title/company] press photo portrait'. For companies: '[Company Name] [CEO full name] interview'. For products/tech: '[product name] real photo hands-on'. For countries: '[Country] [specific event or topic] news photo'. NEVER use generic terms like 'AI technology' or 'artificial intelligence concept' \u2014 always be name-specific.\n- linkedin: Professional post text.\n- facebook: Casual post text.\n- is_agentic_relevant: boolean.\n- confidence: 1-10.\n\n\\\\n\\\\nRULES FOR SUBJECT IDENTIFICATION:\\\\n- subject_type: \\\"person\\\" if about a specific individual; \\\"company\\\" if about an organization, brand, model, or product; \\\"country\\\" if about a nation or government.\\\\n- subject_name: The PRIMARY brand/entity name. For persons \u2192 their COMPANY name (e.g., Sam Altman \u2192 \\\"Anthropic\\\"). For companies/models \u2192 the company (e.g., GPT-5 \u2192 \\\"OpenAI\\\", Claude \u2192 \\\"Anthropic\\\", Gemini \u2192 \\\"Google\\\"). For frameworks \u2192 the framework (e.g., \\\"LangChain\\\", \\\"NVIDIA\\\"). For countries \u2192 country name.\\\\n- company_domain: The official website domain of the primary company/brand (e.g. \\\"microsoft.com\\\", \\\"anthropic.com\\\", \\\"openai.com\\\", \\\"nvidia.com\\\", \\\"google.com\\\", \\\"meta.com\\\"). For countries use empty string.\\\\n- logo_search_query: ALWAYS required \u2014 every news item has a brand. Rules:\\\\n  \u2022 AI model (GPT, Claude, Gemini, Llama): \\\"[creator company] logo transparent PNG\\\" (e.g. \\\"OpenAI logo PNG transparent\\\")\\\\n  \u2022 Company or startup: \\\"[company name] logo transparent PNG white background\\\"\\\\n  \u2022 Person (CEO, researcher): \\\"[their company name] logo transparent PNG\\\"\\\\n  \u2022 AI framework (LangChain, LlamaIndex, AutoGen): \\\"[framework name] logo transparent PNG\\\"\\\\n  \u2022 Hardware/chip (NVIDIA GPU, Apple Silicon): \\\"[brand name] logo transparent PNG\\\"\\\\n  \u2022 Country or government: \\\"[country name] flag PNG\\\" or \\\"[country name] map silhouette\\\"\\\\n  \u2022 Generic AI news: \\\"artificial intelligence logo PNG\\\"\\\\n\\\\nReturn ONLY valid JSON:\n{\n  \"is_agentic_relevant\": true,\n  \"headline\": \"...\",\n  \"headline_highlights\": [...],\n  \"summary\": \"...\",\n  \"full_article\": \"...\",\n  \"image_prompt\": \"...\",\n  \"image_search_query\": \"...\",\n  \"linkedin\": \"...\",\n  \"facebook\": \"...\",\n  \"source_url\": \"${$json.source_url}\",\n  \"subreddit\": \"${$json.subreddit}\",\n  \"reddit_url\": \"${$json.reddit_url}\",\n  \"date\": \"${$json.date}\",\n  \"row_number\": ${$json.row_number},\n  \"confidence\": 8\n}`\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"maxOutputTokens\": 4096,\n    \"temperature\": 0.4\n  }\n}) }}",
                 "options": {}
             },
             "id": "node-claude-analysis",
@@ -54,7 +58,7 @@
         },
         {
             "parameters": {
-                "jsCode": "try {\n  const raw = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\n\n  let jsonStr = '';\n\n  // Build the fence string without writing backtick characters directly\n  const FENCE = String.fromCharCode(96, 96, 96);\n\n  // Strategy 1: extract content between code fences\n  const fenceStart = raw.indexOf(FENCE);\n  if (fenceStart !== -1) {\n    const afterOpen = raw.slice(fenceStart + 3);\n    // Skip optional \"json\" language tag\n    const noLang = afterOpen.toLowerCase().startsWith('json')\n      ? afterOpen.slice(4)\n      : afterOpen;\n    const fenceEnd = noLang.indexOf(FENCE);\n    jsonStr = (fenceEnd !== -1 ? noLang.slice(0, fenceEnd) : noLang).trim();\n  }\n\n  // Strategy 2: find first { to last }\n  if (!jsonStr) {\n    const start = raw.indexOf('{');\n    const end = raw.lastIndexOf('}');\n    if (start !== -1 && end > start) jsonStr = raw.slice(start, end + 1);\n  }\n\n  // Strategy 3: use raw directly\n  if (!jsonStr) jsonStr = raw.trim();\n\n  if (!jsonStr) throw new Error('No JSON found in Gemini response');\n\n  const parsed = JSON.parse(jsonStr);\n  if (!parsed.headline) throw new Error('Missing headline field');\n  return [{ json: parsed }];\n} catch(e) {\n  const raw = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  return [{ json: { _parse_error: e.message, _raw: raw.substring(0, 2000) } }];\n}"
+                "jsCode": "try {\n  const raw = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  if (!raw) throw new Error('Empty Gemini response');\n\n  const FENCE = String.fromCharCode(96, 96, 96);\n\n  // \u2500\u2500 Extract JSON string from response \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  function extractJsonStr(text) {\n    // Try fence blocks first\n    const fi = text.indexOf(FENCE);\n    if (fi !== -1) {\n      const after = text.slice(fi + 3);\n      const stripped = after.toLowerCase().startsWith('json') ? after.slice(4) : after;\n      const fe = stripped.indexOf(FENCE);\n      const s = (fe !== -1 ? stripped.slice(0, fe) : stripped).trim();\n      if (s.startsWith('{')) return s;\n    }\n    // Find outermost { ... }\n    const start = text.indexOf('{');\n    const end = text.lastIndexOf('}');\n    if (start !== -1 && end > start) return text.slice(start, end + 1);\n    return text.trim();\n  }\n\n  // \u2500\u2500 JSON sanitizer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  function sanitize(str) {\n    return str\n      .replace(/^\\uFEFF/, '')\n      .replace(/,\\s*([}\\]])/g, '$1')          // trailing commas\n      .replace(/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]/g, '');  // bad control chars\n  }\n\n  // \u2500\u2500 Field-by-field regex extractor (nuclear fallback) \u2500\u2500\u2500\u2500\u2500\n  function extractFields(text) {\n    const get = (key, isArr) => {\n      if (isArr) {\n        const m = text.match(new RegExp(`\"${key}\"\\\\s*:\\\\s*(\\\\[(?:[^\\\\[\\\\]]*|\\\\[[^\\\\[\\\\]]*\\\\])*\\\\])`));\n        if (!m) return null;\n        try { return JSON.parse(sanitize(m[1])); } catch(e) { return []; }\n      }\n      // String value\n      const m = text.match(new RegExp(`\"${key}\"\\\\s*:\\\\s*\"((?:[^\"\\\\\\\\]|\\\\\\\\.)*)\"`));\n      if (m) return m[1].replace(/\\\\n/g, '\\n').replace(/\\\\\"/g, '\"');\n      // Number/bool\n      const m2 = text.match(new RegExp(`\"${key}\"\\\\s*:\\\\s*([0-9.]+|true|false)`));\n      if (m2) {\n        const v = m2[1];\n        if (v === 'true') return true;\n        if (v === 'false') return false;\n        return isNaN(v) ? v : Number(v);\n      }\n      return null;\n    };\n    return {\n      is_agentic_relevant:  get('is_agentic_relevant') ?? true,\n      headline:             get('headline') || '',\n      headline_highlights:  get('headline_highlights', true) || [],\n      summary:              get('summary') || '',\n      full_article:         get('full_article') || '',\n      image_prompt:         get('image_prompt') || '',\n      image_search_query:   get('image_search_query') || '',\n      linkedin:             get('linkedin') || '',\n      facebook:             get('facebook') || '',\n      source_url:           get('source_url') || '',\n      subreddit:            get('subreddit') || '',\n      reddit_url:           get('reddit_url') || '',\n      date:                 get('date') || '',\n      row_number:           get('row_number') || 0,\n      confidence:           get('confidence') || 7,\n      subject_type:         get('subject_type') || 'company',\n      subject_name:         get('subject_name') || '',\n      company_domain:       get('company_domain') || '',\n      logo_search_query:    get('logo_search_query') || '',\n    };\n  }\n\n  const jsonStr = extractJsonStr(raw);\n\n  // Try 1: direct parse\n  let parsed;\n  try { parsed = JSON.parse(jsonStr); } catch(_) {}\n\n  // Try 2: sanitize then parse\n  if (!parsed) {\n    try { parsed = JSON.parse(sanitize(jsonStr)); } catch(_) {}\n  }\n\n  // Try 3: field-by-field regex (works even on truncated/malformed JSON)\n  if (!parsed || !parsed.headline) {\n    parsed = extractFields(raw);\n  }\n\n  if (!parsed.headline) throw new Error('Could not extract headline from Gemini response');\n  return [{ json: parsed }];\n} catch(e) {\n  const raw = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  return [{ json: { _parse_error: e.message, _raw: raw.substring(0, 3000) } }];\n}"
             },
             "id": "node-parse-claude",
             "name": "Parse Gemini Response",
@@ -198,7 +202,7 @@
                 },
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={{ (function() {\n  const json = $input.item.json;\n  const images = json.reference_base64_images || [];\n  const logob64 = json.logo_base64 || null;\n  const subjectName = json.subject_name || '';\n\n  const parts = [\n    {\n      \"text\": `You are a professional news graphic designer. Refine the visual prompt for Seedream-v4 based on news context and reference photos.\n\nCRITICAL RULE: Return ONLY the raw visual prompt text. No explanation, no markdown. Just the prompt.\n\nYour job: read the headline and summary, then write a SCENE PROMPT that tells the story visually — like a film still or magazine editorial photo.\n\nSCENE RULES:\n- Ask yourself: what is the KEY VISUAL MOMENT of this news story?\n- MEDIUM SHOT or ENVIRONMENTAL SHOT — show enough context to tell the story, not just a face\n- If person is in reference photos: use their actual likeness (face, hair, clothing)\n- If a logo image is provided: incorporate it NATURALLY in the scene — on a laptop lid, on a screen, on a building wall, on a product, on a t-shirt. Do NOT force it. Place it where it would realistically appear.\n\nSCREEN / CONSOLE RULE:\n- Screens showing blurred code, terminal output, or console text ARE allowed — they look realistic and tell the story\n- Example: \"monitor showing scrolling green terminal code\", \"laptop screen with dark IDE open, code visible\"\n- FORBIDDEN: floating text labels, speech bubbles, title cards, captions, name badges, explicit product name text written in the air\n\nNO explicit text labels or captions floating in the scene. Natural screen/console content is fine.\n\nSCENE EXAMPLES:\n- AI model launch → person at desk amazed, laptop screen showing a chat interface with blurred text\n- Cybersecurity → hooded figure at multiple monitors with scrolling terminal code, dim blue atmosphere\n- GPU/hardware launch → engineer holding chip up, ${subjectName} logo visible on packaging behind them\n- AI framework release → developer at desk with VS Code open, code on screen, coffee mug nearby\n- Funding/deal → handshake in glass office, city skyline behind\n- Robot/automation → humanoid robot or robotic arm in modern lab\n\nNEVER: sci-fi holographic UI, floating interfaces, neon god rays, cartoon, anime, CGI, 3D render\n\nCinestill 800t film style. Sharp subject, contextual background.\n\nNEWS HEADLINE: \\${json.headline}\nNEWS SUMMARY: \\${json.summary}\n\n` + (images.length > 0 ? \"Reference photos provided — use the actual person's likeness.\" : \"\") + (logob64 ? ` Logo image provided — incorporate the ${subjectName} logo naturally in the scene where it would realistically appear.` : \"\")\n    }\n  ];\n\n  // Add press photo references\n  images.forEach(b64 => {\n    parts.push({ \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": b64 } });\n  });\n\n  // Add logo as a reference image so Gemini can see it\n  if (logob64) {\n    const logoMime = logob64.startsWith('/9j') ? 'image/jpeg' : 'image/png';\n    parts.push({ \"inline_data\": { \"mime_type\": logoMime, \"data\": logob64 } });\n  }\n\n  return JSON.stringify({\n    \"contents\": [{ \"parts\": parts }],\n    \"generationConfig\": { \"maxOutputTokens\": 4096, \"temperature\": 0.4 }\n  });\n})() }}",
+                "jsonBody": "={{ (function() {\n  const json = $input.item.json;\n  const images = json.reference_base64_images || [];\n  const logob64 = json.logo_base64 || null;\n  const subjectName = json.subject_name || '';\n\n  const parts = [\n    {\n      \"text\": `You are a professional news graphic designer. Refine the visual prompt for Seedream-v4 based on news context and reference photos.\n\nCRITICAL RULE: Return ONLY the raw visual prompt text. No explanation, no markdown. Just the prompt.\n\nYour job: read the headline and summary, then write a SCENE PROMPT that tells the story visually \u2014 like a film still or magazine editorial photo.\n\nSCENE RULES:\n- Ask yourself: what is the KEY VISUAL MOMENT of this news story?\n- MEDIUM SHOT or ENVIRONMENTAL SHOT \u2014 show enough context to tell the story, not just a face\n- If person is in reference photos: use their actual likeness (face, hair, clothing)\n- If a logo image is provided: incorporate it NATURALLY in the scene \u2014 on a laptop lid, on a screen, on a building wall, on a product, on a t-shirt. Do NOT force it. Place it where it would realistically appear.\n\nSCREEN / CONSOLE RULE:\n- Screens showing blurred code, terminal output, or console text ARE allowed \u2014 they look realistic and tell the story\n- Example: \"monitor showing scrolling green terminal code\", \"laptop screen with dark IDE open, code visible\"\n- FORBIDDEN: floating text labels, speech bubbles, title cards, captions, name badges, explicit product name text written in the air\n\nNO explicit text labels or captions floating in the scene. Natural screen/console content is fine.\n\nSCENE EXAMPLES:\n- AI model launch \u2192 person at desk amazed, laptop screen showing a chat interface with blurred text\n- Cybersecurity \u2192 hooded figure at multiple monitors with scrolling terminal code, dim blue atmosphere\n- GPU/hardware launch \u2192 engineer holding chip up, ${subjectName} logo visible on packaging behind them\n- AI framework release \u2192 developer at desk with VS Code open, code on screen, coffee mug nearby\n- Funding/deal \u2192 handshake in glass office, city skyline behind\n- Robot/automation \u2192 humanoid robot or robotic arm in modern lab\n\nNEVER: sci-fi holographic UI, floating interfaces, neon god rays, cartoon, anime, CGI, 3D render\n\nCinestill 800t film style. Sharp subject, contextual background.\n\nNEWS HEADLINE: \\${json.headline}\nNEWS SUMMARY: \\${json.summary}\n\n` + (images.length > 0 ? \"Reference photos provided \u2014 use the actual person's likeness.\" : \"\") + (logob64 ? ` Logo image provided \u2014 incorporate the ${subjectName} logo naturally in the scene where it would realistically appear.` : \"\")\n    }\n  ];\n\n  // Add press photo references\n  images.forEach(b64 => {\n    parts.push({ \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": b64 } });\n  });\n\n  // Add logo as a reference image so Gemini can see it\n  if (logob64) {\n    const logoMime = logob64.startsWith('/9j') ? 'image/jpeg' : 'image/png';\n    parts.push({ \"inline_data\": { \"mime_type\": logoMime, \"data\": logob64 } });\n  }\n\n  return JSON.stringify({\n    \"contents\": [{ \"parts\": parts }],\n    \"generationConfig\": { \"maxOutputTokens\": 4096, \"temperature\": 0.4 }\n  });\n})() }}",
                 "options": {}
             },
             "id": "node-gemini-visual-refine",
@@ -212,7 +216,7 @@
         },
         {
             "parameters": {
-                "jsCode": "const json = $input.item.json;\nlet prompt = json.image_prompt;\ntry {\n  const res = $('Gemini Visual Designer').item.json;\n  let raw = res.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  // Strip Markdown headers and conversational crutch\n  if (raw.includes('**VISUAL PROMPT:**')) raw = raw.split('**VISUAL PROMPT:**')[1];\n  else if (raw.includes('VISUAL PROMPT:')) raw = raw.split('VISUAL PROMPT:')[1];\n  raw = raw.replace(/^(Here's|This is|I have refined|Designed as).*?[:\\n]/si, '');\n  raw = raw.replace(/\\*\\*/g, '').trim();\n  if (raw) prompt = raw;\n} catch (e) {}\nreturn [{\n  json: {\n    ...json,\n    wavespeed_payload: {\n      prompt: prompt.replace(/\\\\n/g, ' ').replace(/\"/g, \"'\") + \" -- cinestill 800t film grain, high fidelity editorial photo, real people real environments, story-driven scene, sharp focus on subject, natural cinematic lighting, screens may show blurred code or terminal output. NEGATIVE PROMPT: floating text labels, speech bubbles, captions, subtitles, title cards, name badges, watermark, text overlay, words floating in air, sci-fi, futuristic, holographic UI, floating interface, abstract digital art, CGI render, 3D render, illustration, anime, cartoon, fantasy, extreme close-up face only, disembodied floating head\",\n      aspect_ratio: '4:5',\n      output_format: 'png',\n      enable_sync_mode: true,\n      image: json.reference_base64_images?.[0] || json.press_image_url,\n      reference_images: json.reference_base64_images || []\n    }\n  }\n}];"
+                "jsCode": "const json = $input.item.json;\nlet prompt = json.image_prompt;\ntry {\n  const res = $('Gemini Visual Designer').item.json;\n  let raw = res.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  if (raw.includes('**VISUAL PROMPT:**')) raw = raw.split('**VISUAL PROMPT:**')[1];\n  else if (raw.includes('VISUAL PROMPT:')) raw = raw.split('VISUAL PROMPT:')[1];\n  raw = raw.replace(/^(Here's|This is|I have refined|Designed as).*?[:\\n]/si, '');\n  raw = raw.replace(/\\*\\*/g, '').trim();\n  if (raw) prompt = raw;\n} catch (e) {}\n\nconst cleanPrompt = prompt.replace(/\\\\n/g, ' ').replace(/\"/g, \"'\");\n\nreturn [{\n  json: {\n    ...json,\n    wavespeed_payload: {\n      prompt: cleanPrompt + \" -- cinestill 800t film grain, high fidelity editorial photo, real people real environments, story-driven scene, sharp focus on subject, natural cinematic lighting, screens may show blurred code or terminal output. NEGATIVE PROMPT: floating text labels, speech bubbles, captions, subtitles, title cards, name badges, watermark, text overlay, words floating in air, sci-fi, futuristic, holographic UI, floating interface, abstract digital art, CGI render, 3D render, illustration, anime, cartoon, fantasy\",\n      aspect_ratio: '4:5',\n      output_format: 'png',\n      enable_sync_mode: true\n    }\n  }\n}];"
             },
             "id": "node-prep-wavespeed",
             "name": "Prep WaveSpeed",
@@ -256,7 +260,7 @@
         },
         {
             "parameters": {
-                "jsCode": "// ============================================================\n// HYPERSCALER NEWS CARD COMPOSITOR v6.2\n// Composites text overlay onto AI-generated background\n// V14: Logo passed as separate field to sharp-worker (librsvg fix)\n// ============================================================\n\nconst geminiData = $('Confidence Gate').item.json;\n\n// ─── Logo / Map Badge setup ───────────────────────────────────\n// Read directly from Merge Logo Data node — survives the HTTP download step\nlet logo_base64 = null;\nlet subjectType = 'company';\ntry {\n  const logoData = $('Merge Logo Data').item.json;\n  logo_base64 = logoData.logo_base64 || null;\n  subjectType = logoData.subject_type || 'company';\n} catch(e) {}\n\nconst binaryItems = $input.item.binary || {};\nconst binKeys = Object.keys(binaryItems);\n\n// ── Binary resolution (n8n 2.x Buffer handling) ──────────────\nconst propName = binaryItems.data ? 'data' : (binKeys.length > 0 ? binKeys[0] : null);\nif (!propName) {\n  throw new Error('[Compositor] No binary found in input. Available keys: ' + binKeys.join(', '));\n}\n\nconst testBuf = await this.helpers.getBinaryDataBuffer(0, propName);\nif (!testBuf || testBuf.length < 100) {\n  throw new Error(`[Compositor] Binary is only ${testBuf ? testBuf.length : 0} bytes — download failed or URL expired.`);\n}\n\n// Support JPEG & PNG magic bytes\nconst isPng = [0x89, 0x50, 0x4E, 0x47].every((b, i) => testBuf[i] === b);\nconst isJpeg = [0xFF, 0xD8, 0xFF].every((b, i) => testBuf[i] === b);\nif (!isPng && !isJpeg) {\n  const hex = Array.from(testBuf.slice(0, 4)).map(b => b.toString(16).padStart(2,'0')).join(' ');\n  throw new Error(`[Compositor] Unsupported format (magic: ${hex}). WaveSpeed may have returned an error page.`);\n}\n\n// ---- Extract card data ----\nconst headline = (geminiData.headline || 'AI NEWS TODAY').toUpperCase().trim();\nconst highlights = (geminiData.headline_highlights || []).map(h => h.toUpperCase().trim());\nconst brandName = 'HYPERSCALER';\n\n// ---- Build SVG overlay ----\nconst W = 1080;\nconst H = 1350;\n\nfunction xmlEscape(str) {\n  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&apos;');\n}\n\nfunction colorizeWords(text, highlights) {\n  // Build a set of individual highlight words for exact matching\n  const highlightSet = new Set();\n  for (const h of highlights) {\n    // Split multi-word highlights and add each word individually\n    String(h).toUpperCase().replace(/[^A-Z0-9 $]/g, '').split(' ')\n      .filter(w => w.length >= 1)\n      .forEach(w => highlightSet.add(w));\n  }\n  const words = text.split(' ');\n  return words.map(word => {\n    // Strip punctuation for comparison but preserve original for rendering\n    const clean = word.replace(/[^A-Z0-9$]/g, '');\n    // Exact match only — no substring matching to avoid false positives\n    const isCyan = clean.length >= 1 && highlightSet.has(clean);\n    return { word, isCyan };\n  });\n}\n\nfunction wrapWords(colorWords, maxCharsPerLine) {\n  const lines = [];\n  let currentLine = [];\n  let currentLen = 0;\n  for (const cw of colorWords) {\n    if (currentLen + cw.word.length + (currentLine.length > 0 ? 1 : 0) > maxCharsPerLine && currentLine.length > 0) {\n      lines.push(currentLine);\n      currentLine = [cw];\n      currentLen = cw.word.length;\n    } else {\n      if (currentLine.length > 0) currentLen += 1;\n      currentLen += cw.word.length;\n      currentLine.push(cw);\n    }\n  }\n  if (currentLine.length > 0) lines.push(currentLine);\n  \n  // Balance orphan last line if applicable\n  if (lines.length > 1) {\n    const lastLine = lines[lines.length - 1];\n    const prevLine = lines[lines.length - 2];\n    \n    // If last line has 1 word and previous has > 2 words, balance it\n    if (lastLine.length === 1 && prevLine.length > 2) {\n      const lastLineStrLen = lastLine[0].word.length;\n      if (lastLineStrLen <= 12) {\n        lastLine.unshift(prevLine.pop());\n      }\n    }\n  }\n  \n  return lines;\n}\n\nconst colorWords = colorizeWords(headline, highlights);\n// Wrap at 22 characters max per line\nconst wrappedLines = wrapWords(colorWords, 22);\n\n// Calculate the longest line character count for dynamic scaling\nlet longestCharCount = 0;\nfor (const line of wrappedLines) {\n    const charCount = line.reduce((sum, cw) => sum + cw.word.length, 0) + Math.max(0, line.length - 1);\n    if (charCount > longestCharCount) {\n        longestCharCount = charCount;\n    }\n}\nif (longestCharCount === 0) longestCharCount = 10;\n\n// Dynamic font scaling \nconst targetMargin = 100;\nconst targetWidth = W - (targetMargin * 2); \nconst charWidthFactor = 0.65; \nconst calcFontSize = Math.round(targetWidth / (longestCharCount * charWidthFactor));\n\n// Enforce bounds on font size\nconst minFontSize = 70;\nconst maxFontSize = 120;\nconst baseFontSize = Math.min(maxFontSize, Math.max(minFontSize, calcFontSize));\n\nconst lineHeight = baseFontSize * 1.15; \nconst lineCount = wrappedLines.length;\nconst totalTextHeight = lineCount * lineHeight;\n\n// V13: Push the text ensemble much lower, closer to the bottom edge\nconst bottomMargin = 80; // Significantly reduced from 130\nconst startY = H - bottomMargin - totalTextHeight + baseFontSize; \nconst brandY = startY - baseFontSize - 80; // Reduced gap above text\n\nlet textSvg = '';\nwrappedLines.forEach((line, lineIdx) => {\n  const y = startY + (lineIdx * lineHeight);\n  textSvg += `<text x=\"${W/2}\" y=\"${y}\" font-family=\"'Arial Black', 'Impact', sans-serif\" font-size=\"${baseFontSize}\" font-weight=\"900\" text-anchor=\"middle\" letter-spacing=\"-1\" xml:space=\"preserve\">`;\n  line.forEach((cw, wi) => {\n    const color = cw.isCyan ? '#00D4FF' : '#FFFFFF';\n    textSvg += `<tspan fill=\"${color}\">${xmlEscape(cw.word)}</tspan>`;\n    if (wi < line.length - 1) textSvg += ' '; \n  });\n  textSvg += `</text>`;\n});\n\n// V13: Move gradient start lower to reveal more of the top image\nconst GRAD_START_FRAC = 0.45; // Moved down from 0.35\nconst svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"${W}\" height=\"${H}\">\n  <defs>\n    <linearGradient id=\"darkGrad\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">\n      <stop offset=\"${GRAD_START_FRAC}\" stop-color=\"#000000\" stop-opacity=\"0\"/>\n      <stop offset=\"0.75\" stop-color=\"#060810\" stop-opacity=\"0.95\"/>\n      <stop offset=\"1\" stop-color=\"#000000\" stop-opacity=\"1\"/>\n    </linearGradient>\n    <filter id=\"textShadow\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\">\n      <feDropShadow dx=\"0\" dy=\"4\" stdDeviation=\"8\" flood-color=\"#000000\" flood-opacity=\"0.9\"/>\n    </filter>\n  </defs>\n  <rect x=\"0\" y=\"0\" width=\"${W}\" height=\"${H}\" fill=\"url(#darkGrad)\"/>\n  \n  <!-- GETINTOAI Style Brand Divider -->\n  <line x1=\"140\" y1=\"${brandY}\" x2=\"${W/2 - 145}\" y2=\"${brandY}\" stroke=\"#FFFFFF\" stroke-width=\"1.5\" opacity=\"0.6\"/>\n  <text x=\"${W/2}\" y=\"${brandY + 8}\" font-family=\"'Arial', sans-serif\" font-size=\"24\" font-weight=\"500\" fill=\"#FFFFFF\" text-anchor=\"middle\" letter-spacing=\"4\" filter=\"url(#textShadow)\">${xmlEscape(brandName)}</text>\n  <line x1=\"${W/2 + 145}\" y1=\"${brandY}\" x2=\"${W - 140}\" y2=\"${brandY}\" stroke=\"#FFFFFF\" stroke-width=\"1.5\" opacity=\"0.6\"/>\n  \n  <g filter=\"url(#textShadow)\">${textSvg}</g>\n${(function() {\n  if (!logo_base64) return '';\n  const cx = 918, cy = 148, r = 90;\n  const ro = r + 14; // outer metallic ring radius\n  return `\n    <defs>\n      <!-- Metallic ring gradient -->\n      <linearGradient id=\"ringGrad\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">\n        <stop offset=\"0%\"   stop-color=\"#d0d0d0\"/>\n        <stop offset=\"35%\"  stop-color=\"#707070\"/>\n        <stop offset=\"65%\"  stop-color=\"#404040\"/>\n        <stop offset=\"100%\" stop-color=\"#1a1a1a\"/>\n      </linearGradient>\n      <!-- Cyan glow ring gradient -->\n      <linearGradient id=\"cyanRingGrad\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">\n        <stop offset=\"0%\"   stop-color=\"#00D4FF\" stop-opacity=\"1\"/>\n        <stop offset=\"50%\"  stop-color=\"#0099CC\" stop-opacity=\"0.8\"/>\n        <stop offset=\"100%\" stop-color=\"#00D4FF\" stop-opacity=\"0.6\"/>\n      </linearGradient>\n      <!-- Glass highlight inside lens -->\n      <radialGradient id=\"glassHL\" cx=\"35%\" cy=\"28%\" r=\"55%\">\n        <stop offset=\"0%\"   stop-color=\"white\" stop-opacity=\"0.35\"/>\n        <stop offset=\"60%\"  stop-color=\"white\" stop-opacity=\"0.05\"/>\n        <stop offset=\"100%\" stop-color=\"white\" stop-opacity=\"0\"/>\n      </radialGradient>\n      <!-- Logo background dark radial -->\n      <radialGradient id=\"lensBg\" cx=\"50%\" cy=\"50%\" r=\"50%\">\n        <stop offset=\"0%\"   stop-color=\"#111111\"/>\n        <stop offset=\"100%\" stop-color=\"#000000\"/>\n      </radialGradient>\n      <!-- Drop shadow filter -->\n      <filter id=\"lensShadow\" x=\"-30%\" y=\"-30%\" width=\"160%\" height=\"160%\">\n        <feDropShadow dx=\"0\" dy=\"8\" stdDeviation=\"16\" flood-color=\"#000000\" flood-opacity=\"0.75\"/>\n      </filter>\n      <!-- Cyan outer glow -->\n      <filter id=\"cyanGlow\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\">\n        <feGaussianBlur stdDeviation=\"6\" result=\"blur\"/>\n        <feMerge><feMergeNode in=\"blur\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>\n      </filter>\n    </defs>\n\n    <!-- Outer drop shadow base -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${ro + 2}\" fill=\"#000\" opacity=\"0.01\" filter=\"url(#lensShadow)\"/>\n\n    <!-- Cyan glow outer ring -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${ro + 4}\" fill=\"none\" stroke=\"url(#cyanRingGrad)\" stroke-width=\"3\" opacity=\"0.9\" filter=\"url(#cyanGlow)\"/>\n\n    <!-- Metallic outer ring -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${ro}\" fill=\"url(#ringGrad)\"/>\n\n    <!-- Thin white inner border -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${r + 2}\" fill=\"none\" stroke=\"white\" stroke-width=\"1.5\" opacity=\"0.25\"/>\n\n    <!-- Lens dark background -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${r}\" fill=\"url(#lensBg)\"/>\n\n    <!-- Logo image is now composited by sharp-worker natively (librsvg cannot render base64 images) -->\n\n    <!-- Glass reflection highlight overlay -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${r}\" fill=\"url(#glassHL)\"/>\n\n    <!-- Cyan crosshair tick marks (camera viewfinder style) -->\n    <line x1=\"${cx}\" y1=\"${cy - ro - 10}\" x2=\"${cx}\" y2=\"${cy - ro + 6}\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.8\"/>\n    <line x1=\"${cx}\" y1=\"${cy + ro - 6}\" x2=\"${cx}\" y2=\"${cy + ro + 10}\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.8\"/>\n    <line x1=\"${cx - ro - 10}\" y1=\"${cy}\" x2=\"${cx - ro + 6}\" y2=\"${cy}\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.8\"/>\n    <line x1=\"${cx + ro - 6}\" y1=\"${cy}\" x2=\"${cx + ro + 10}\" y2=\"${cy}\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.8\"/>\n\n    <!-- Corner arc brackets (top-left, top-right) -->\n    <path d=\"M ${cx - ro - 6} ${cy - 18} A ${ro + 6} ${ro + 6} 0 0 1 ${cx - 18} ${cy - ro - 6}\" fill=\"none\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.5\"/>\n    <path d=\"M ${cx + 18} ${cy - ro - 6} A ${ro + 6} ${ro + 6} 0 0 1 ${cx + ro + 6} ${cy - 18}\" fill=\"none\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.5\"/>`;\n})()}\n</svg>`;\n\nconst svgBase64 = Buffer.from(svg).toString('base64');\nconst bgBase64 = testBuf.toString('base64');\n\nreturn [{\n  json: { \n    ...geminiData, \n    compositor_mode: 'svg_overlay', \n    svg_overlay_base64: svgBase64, \n    bg_image_base64: bgBase64, \n    logo_base64: logo_base64 || null,\n    image_source: 'wavespeed_seedream' \n  },\n  binary: {\n    bg_image: binaryItems[propName] || { data: bgBase64, mimeType: isPng ? 'image/png' : 'image/jpeg', fileName: 'background.' + (isPng ? 'png' : 'jpg') },\n    svg_overlay: { data: svgBase64, mimeType: 'image/svg+xml', fileName: 'overlay.svg' }\n  }\n}];"
+                "jsCode": "// ============================================================\n// HYPERSCALER NEWS CARD COMPOSITOR v6.2\n// Composites text overlay onto AI-generated background\n// V14: Logo passed as separate field to sharp-worker (librsvg fix)\n// ============================================================\n\nconst geminiData = $('Confidence Gate').item.json;\n\nlet logo_base64 = null;\nlet logo_url_for_output = null;\nlet subjectType = 'company';\n\nconst binaryItems = $input.item.binary || {};\nconst binKeys = Object.keys(binaryItems);\n\n// \u2500\u2500 Binary resolution (n8n 2.x Buffer handling) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst propName = binaryItems.data ? 'data' : (binKeys.length > 0 ? binKeys[0] : null);\nif (!propName) {\n  throw new Error('[Compositor] No binary found in input. Available keys: ' + binKeys.join(', '));\n}\n\nconst testBuf = await this.helpers.getBinaryDataBuffer(0, propName);\nif (!testBuf || testBuf.length < 100) {\n  throw new Error(`[Compositor] Binary is only ${testBuf ? testBuf.length : 0} bytes \u2014 download failed or URL expired.`);\n}\n\n// Support JPEG & PNG magic bytes\nconst isPng = [0x89, 0x50, 0x4E, 0x47].every((b, i) => testBuf[i] === b);\nconst isJpeg = [0xFF, 0xD8, 0xFF].every((b, i) => testBuf[i] === b);\nif (!isPng && !isJpeg) {\n  const hex = Array.from(testBuf.slice(0, 4)).map(b => b.toString(16).padStart(2,'0')).join(' ');\n  throw new Error(`[Compositor] Unsupported format (magic: ${hex}). WaveSpeed may have returned an error page.`);\n}\n\n// ---- Extract card data ----\nconst headline = (geminiData.headline || 'AI NEWS TODAY').toUpperCase().trim();\nconst highlights = (geminiData.headline_highlights || []).map(h => h.toUpperCase().trim());\nconst brandName = 'HYPERSCALER';\n\n// ---- Build SVG overlay ----\nconst W = 1080;\nconst H = 1350;\n\nfunction xmlEscape(str) {\n  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&apos;');\n}\n\nfunction colorizeWords(text, highlights) {\n  // Build a set of individual highlight words for exact matching\n  const highlightSet = new Set();\n  for (const h of highlights) {\n    // Split multi-word highlights and add each word individually\n    String(h).toUpperCase().replace(/[^A-Z0-9 $]/g, '').split(' ')\n      .filter(w => w.length >= 1)\n      .forEach(w => highlightSet.add(w));\n  }\n  const words = text.split(' ');\n  return words.map(word => {\n    // Strip punctuation for comparison but preserve original for rendering\n    const clean = word.replace(/[^A-Z0-9$]/g, '');\n    // Exact match only \u2014 no substring matching to avoid false positives\n    const isCyan = clean.length >= 1 && highlightSet.has(clean);\n    return { word, isCyan };\n  });\n}\n\nfunction wrapWords(colorWords, maxCharsPerLine) {\n  const lines = [];\n  let currentLine = [];\n  let currentLen = 0;\n  for (const cw of colorWords) {\n    if (currentLen + cw.word.length + (currentLine.length > 0 ? 1 : 0) > maxCharsPerLine && currentLine.length > 0) {\n      lines.push(currentLine);\n      currentLine = [cw];\n      currentLen = cw.word.length;\n    } else {\n      if (currentLine.length > 0) currentLen += 1;\n      currentLen += cw.word.length;\n      currentLine.push(cw);\n    }\n  }\n  if (currentLine.length > 0) lines.push(currentLine);\n  \n  // Balance orphan last line if applicable\n  if (lines.length > 1) {\n    const lastLine = lines[lines.length - 1];\n    const prevLine = lines[lines.length - 2];\n    \n    // If last line has 1 word and previous has > 2 words, balance it\n    if (lastLine.length === 1 && prevLine.length > 2) {\n      const lastLineStrLen = lastLine[0].word.length;\n      if (lastLineStrLen <= 12) {\n        lastLine.unshift(prevLine.pop());\n      }\n    }\n  }\n  \n  return lines;\n}\n\nconst colorWords = colorizeWords(headline, highlights);\n// Wrap at 22 characters max per line\nconst wrappedLines = wrapWords(colorWords, 22);\n\n// Calculate the longest line character count for dynamic scaling\nlet longestCharCount = 0;\nfor (const line of wrappedLines) {\n    const charCount = line.reduce((sum, cw) => sum + cw.word.length, 0) + Math.max(0, line.length - 1);\n    if (charCount > longestCharCount) {\n        longestCharCount = charCount;\n    }\n}\nif (longestCharCount === 0) longestCharCount = 10;\n\n// Dynamic font scaling \nconst targetMargin = 100;\nconst targetWidth = W - (targetMargin * 2); \nconst charWidthFactor = 0.65; \nconst calcFontSize = Math.round(targetWidth / (longestCharCount * charWidthFactor));\n\n// Enforce bounds on font size\nconst minFontSize = 70;\nconst maxFontSize = 120;\nconst baseFontSize = Math.min(maxFontSize, Math.max(minFontSize, calcFontSize));\n\nconst lineHeight = baseFontSize * 1.15; \nconst lineCount = wrappedLines.length;\nconst totalTextHeight = lineCount * lineHeight;\n\n// V13: Push the text ensemble much lower, closer to the bottom edge\nconst bottomMargin = 80; // Significantly reduced from 130\nconst startY = H - bottomMargin - totalTextHeight + baseFontSize; \nconst brandY = startY - baseFontSize - 80; // Reduced gap above text\n\nlet textSvg = '';\nwrappedLines.forEach((line, lineIdx) => {\n  const y = startY + (lineIdx * lineHeight);\n  textSvg += `<text x=\"${W/2}\" y=\"${y}\" font-family=\"'Arial Black', 'Impact', sans-serif\" font-size=\"${baseFontSize}\" font-weight=\"900\" text-anchor=\"middle\" letter-spacing=\"-1\" xml:space=\"preserve\">`;\n  line.forEach((cw, wi) => {\n    const color = cw.isCyan ? '#00D4FF' : '#FFFFFF';\n    textSvg += `<tspan fill=\"${color}\">${xmlEscape(cw.word)}</tspan>`;\n    if (wi < line.length - 1) textSvg += ' '; \n  });\n  textSvg += `</text>`;\n});\n\n// V13: Move gradient start lower to reveal more of the top image\nconst GRAD_START_FRAC = 0.45; // Moved down from 0.35\nconst svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"${W}\" height=\"${H}\">\n  <defs>\n    <linearGradient id=\"darkGrad\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">\n      <stop offset=\"${GRAD_START_FRAC}\" stop-color=\"#000000\" stop-opacity=\"0\"/>\n      <stop offset=\"0.75\" stop-color=\"#060810\" stop-opacity=\"0.95\"/>\n      <stop offset=\"1\" stop-color=\"#000000\" stop-opacity=\"1\"/>\n    </linearGradient>\n    <filter id=\"textShadow\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\">\n      <feDropShadow dx=\"0\" dy=\"4\" stdDeviation=\"8\" flood-color=\"#000000\" flood-opacity=\"0.9\"/>\n    </filter>\n  </defs>\n  <rect x=\"0\" y=\"0\" width=\"${W}\" height=\"${H}\" fill=\"url(#darkGrad)\"/>\n  \n  <!-- GETINTOAI Style Brand Divider -->\n  <line x1=\"140\" y1=\"${brandY}\" x2=\"${W/2 - 145}\" y2=\"${brandY}\" stroke=\"#FFFFFF\" stroke-width=\"1.5\" opacity=\"0.6\"/>\n  <text x=\"${W/2}\" y=\"${brandY + 8}\" font-family=\"'Arial', sans-serif\" font-size=\"24\" font-weight=\"500\" fill=\"#FFFFFF\" text-anchor=\"middle\" letter-spacing=\"4\" filter=\"url(#textShadow)\">${xmlEscape(brandName)}</text>\n  <line x1=\"${W/2 + 145}\" y1=\"${brandY}\" x2=\"${W - 140}\" y2=\"${brandY}\" stroke=\"#FFFFFF\" stroke-width=\"1.5\" opacity=\"0.6\"/>\n  \n  <g filter=\"url(#textShadow)\">${textSvg}</g>\n${(function() {\n  if (!logo_base64) return '';\n  const cx = 918, cy = 158, r = 100;\n  const ro = r + 14; // outer metallic ring radius\n  return `\n    <defs>\n      <!-- Metallic ring gradient -->\n      <linearGradient id=\"ringGrad\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">\n        <stop offset=\"0%\"   stop-color=\"#d0d0d0\"/>\n        <stop offset=\"35%\"  stop-color=\"#707070\"/>\n        <stop offset=\"65%\"  stop-color=\"#404040\"/>\n        <stop offset=\"100%\" stop-color=\"#1a1a1a\"/>\n      </linearGradient>\n      <!-- Cyan glow ring gradient -->\n      <linearGradient id=\"cyanRingGrad\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">\n        <stop offset=\"0%\"   stop-color=\"#00D4FF\" stop-opacity=\"1\"/>\n        <stop offset=\"50%\"  stop-color=\"#0099CC\" stop-opacity=\"0.8\"/>\n        <stop offset=\"100%\" stop-color=\"#00D4FF\" stop-opacity=\"0.6\"/>\n      </linearGradient>\n      <!-- Glass highlight inside lens -->\n      <radialGradient id=\"glassHL\" cx=\"35%\" cy=\"28%\" r=\"55%\">\n        <stop offset=\"0%\"   stop-color=\"white\" stop-opacity=\"0.35\"/>\n        <stop offset=\"60%\"  stop-color=\"white\" stop-opacity=\"0.05\"/>\n        <stop offset=\"100%\" stop-color=\"white\" stop-opacity=\"0\"/>\n      </radialGradient>\n      <!-- Logo background dark radial -->\n      <radialGradient id=\"lensBg\" cx=\"50%\" cy=\"50%\" r=\"50%\">\n        <stop offset=\"0%\"   stop-color=\"#111111\"/>\n        <stop offset=\"100%\" stop-color=\"#000000\"/>\n      </radialGradient>\n      <!-- Drop shadow filter -->\n      <filter id=\"lensShadow\" x=\"-30%\" y=\"-30%\" width=\"160%\" height=\"160%\">\n        <feDropShadow dx=\"0\" dy=\"8\" stdDeviation=\"16\" flood-color=\"#000000\" flood-opacity=\"0.75\"/>\n      </filter>\n      <!-- Cyan outer glow -->\n      <filter id=\"cyanGlow\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\">\n        <feGaussianBlur stdDeviation=\"6\" result=\"blur\"/>\n        <feMerge><feMergeNode in=\"blur\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>\n      </filter>\n    </defs>\n\n    <!-- Outer drop shadow base -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${ro + 2}\" fill=\"#000\" opacity=\"0.01\" filter=\"url(#lensShadow)\"/>\n\n    <!-- Cyan glow outer ring -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${ro + 4}\" fill=\"none\" stroke=\"url(#cyanRingGrad)\" stroke-width=\"3\" opacity=\"0.9\" filter=\"url(#cyanGlow)\"/>\n\n    <!-- Metallic outer ring -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${ro}\" fill=\"url(#ringGrad)\"/>\n\n    <!-- Thin white inner border -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${r + 2}\" fill=\"none\" stroke=\"white\" stroke-width=\"1.5\" opacity=\"0.25\"/>\n\n    <!-- Lens dark background -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${r}\" fill=\"url(#lensBg)\"/>\n\n    <!-- Logo image is now composited by sharp-worker natively (librsvg cannot render base64 images) -->\n\n    <!-- Glass reflection highlight overlay -->\n    <circle cx=\"${cx}\" cy=\"${cy}\" r=\"${r}\" fill=\"url(#glassHL)\"/>\n\n    <!-- Cyan crosshair tick marks (camera viewfinder style) -->\n    <line x1=\"${cx}\" y1=\"${cy - ro - 10}\" x2=\"${cx}\" y2=\"${cy - ro + 6}\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.8\"/>\n    <line x1=\"${cx}\" y1=\"${cy + ro - 6}\" x2=\"${cx}\" y2=\"${cy + ro + 10}\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.8\"/>\n    <line x1=\"${cx - ro - 10}\" y1=\"${cy}\" x2=\"${cx - ro + 6}\" y2=\"${cy}\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.8\"/>\n    <line x1=\"${cx + ro - 6}\" y1=\"${cy}\" x2=\"${cx + ro + 10}\" y2=\"${cy}\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.8\"/>\n\n    <!-- Corner arc brackets (top-left, top-right) -->\n    <path d=\"M ${cx - ro - 6} ${cy - 18} A ${ro + 6} ${ro + 6} 0 0 1 ${cx - 18} ${cy - ro - 6}\" fill=\"none\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.5\"/>\n    <path d=\"M ${cx + 18} ${cy - ro - 6} A ${ro + 6} ${ro + 6} 0 0 1 ${cx + ro + 6} ${cy - 18}\" fill=\"none\" stroke=\"#00D4FF\" stroke-width=\"2\" opacity=\"0.5\"/>`;\n})()}\n</svg>`;\n\nconst svgBase64 = Buffer.from(svg).toString('base64');\nconst bgBase64 = testBuf.toString('base64');\n\nreturn [{\n  json: { \n    ...geminiData, \n    compositor_mode: 'svg_overlay', \n    svg_overlay_base64: svgBase64, \n    bg_image_base64: bgBase64, \n    logo_base64: logo_base64 || null,\n    logo_url: logo_url_for_output || null,\n    company_domain: $input.item.json.company_domain || '',\n    image_source: 'wavespeed_seedream' \n  },\n  binary: {\n    bg_image: binaryItems[propName] || { data: bgBase64, mimeType: isPng ? 'image/png' : 'image/jpeg', fileName: 'background.' + (isPng ? 'png' : 'jpg') },\n    svg_overlay: { data: svgBase64, mimeType: 'image/svg+xml', fileName: 'overlay.svg' }\n  }\n}];"
             },
             "id": "node-compositor",
             "name": "Build SVG Text Overlay",
@@ -296,12 +300,20 @@
                             "value": "={{ $json.logo_base64 || '' }}"
                         },
                         {
+                            "name": "company_domain",
+                            "value": "={{ $json.company_domain || '' }}"
+                        },
+                        {
                             "name": "width",
                             "value": 1080
                         },
                         {
                             "name": "height",
                             "value": 1350
+                        },
+                        {
+                            "name": "logo_url",
+                            "value": "={{ $json.logo_url || '' }}"
                         }
                     ]
                 },
@@ -331,96 +343,16 @@
         },
         {
             "parameters": {
-                "name": "={{ ($json.headline || 'AI_Card').replace(/[^a-zA-Z0-9 ]/g, '').substring(0, 55) + '_' + $now.format('YYYYMMDD_HHmm') + '.png' }}",
-                "driveId": {
-                    "value": "myDrive"
-                },
-                "folderId": {
-                    "value": "={{ $env.GOOGLE_DRIVE_FOLDER_ID }}"
-                },
-                "options": {}
-            },
-            "id": "node-gdrive-upload",
-            "name": "GDrive Upload",
-            "type": "n8n-nodes-base.googleDrive",
-            "typeVersion": 3,
-            "position": [
-                3200,
-                112
-            ],
-            "disabled": true
-        },
-        {
-            "parameters": {
-                "jsCode": "const driveData = $input.item.json;\nreturn [{ json: { ...driveData, drive_file_id: driveData.id || '', drive_view_url: driveData.webViewLink || '', drive_download_url: driveData.webContentLink || `https://drive.google.com/uc?id=${driveData.id}`, drive_direct_img: `https://drive.google.com/thumbnail?id=${driveData.id}&sz=w800` }, binary: $input.item.binary }];"
-            },
-            "id": "node-set-drive-url",
-            "name": "Extract Drive URL",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [
-                3424,
-                112
-            ]
-        },
-        {
-            "parameters": {
-                "jsCode": "const driveInfo = $input.item.json;\nconst claudeData = $('Confidence Gate').item.json;\nreturn [{ json: { ...claudeData, drive_file_id: driveInfo.drive_file_id || driveInfo.id || '', drive_view_url: driveInfo.drive_view_url || driveInfo.webViewLink || '', drive_download_url: driveInfo.drive_download_url || driveInfo.webContentLink || '', drive_direct_img: driveInfo.drive_direct_img || `https://drive.google.com/thumbnail?id=${driveInfo.id}&sz=w800`, image_source: claudeData.image_source || 'ai_generated' }, binary: $input.item.binary }];"
+                "jsCode": "const analysisData = $('Confidence Gate').item.json;\nreturn [{ json: analysisData, binary: $input.item.binary }];"
             },
             "id": "node-merge-drive-claude",
-            "name": "Merge Drive and Claude Data",
+            "name": "Prepare Post Data",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
                 3648,
                 112
             ]
-        },
-        {
-            "parameters": {
-                "operation": "create",
-                "base": {
-                    "value": "={{ $env.AIRTABLE_BASE_ID }}"
-                },
-                "table": {
-                    "value": "HYPERSCALER_BRIEFS"
-                },
-                "columns": {
-                    "mappingMode": "defineBelow",
-                    "value": {
-                        "Headline": "={{ $json.headline }}",
-                        "Summary": "={{ $json.summary }}",
-                        "Full_Article": "={{ $json.full_article }}",
-                        "Confidence": "={{ $json.confidence }}",
-                        "Subreddit": "={{ $json.subreddit }}",
-                        "Reddit_URL": "={{ $json.reddit_url }}",
-                        "Source_URL": "={{ $json.source_url }}",
-                        "Date": "={{ $json.date }}",
-                        "Drive_Image_URL": "={{ $json.drive_view_url }}",
-                        "Drive_Direct_IMG": "={{ $json.drive_direct_img }}",
-                        "LinkedIn_Post": "={{ $json.linkedin }}",
-                        "Facebook_Post": "={{ $json.facebook }}",
-                        "Status": "Ready to Post",
-                        "Image_Source": "={{ $json.image_source || 'ai_generated' }}"
-                    }
-                },
-                "options": {}
-            },
-            "id": "node-airtable-create",
-            "name": "Airtable Warehouse",
-            "type": "n8n-nodes-base.airtable",
-            "typeVersion": 2.1,
-            "position": [
-                3872,
-                112
-            ],
-            "credentials": {
-                "airtableTokenApi": {
-                    "id": "bXon4Q0NJZr2Hm1g",
-                    "name": "Airtable Personal Access Token account"
-                }
-            },
-            "disabled": true
         },
         {
             "parameters": {
@@ -496,38 +428,6 @@
                 4304,
                 160
             ],
-            "disabled": true
-        },
-        {
-            "parameters": {
-                "text": "=*HYPERSCALER Posted:* {{ $json.headline }}\nConfidence: {{ $json.confidence }}/10\n{{ $json.drive_view_url }}\nPosted to LinkedIn and Facebook",
-                "otherOptions": {}
-            },
-            "id": "node-success-notify",
-            "name": "Slack Success",
-            "type": "n8n-nodes-base.slack",
-            "typeVersion": 2.1,
-            "position": [
-                4528,
-                160
-            ],
-            "webhookId": "03c81381-0404-4682-aa2a-df2ff32933be",
-            "disabled": true
-        },
-        {
-            "parameters": {
-                "text": "=*Skipped (low confidence):*\n{{ $json.headline || $json.title }}\nConfidence: {{ $json.confidence || 'N/A' }}/10\nReason: {{ $json._parse_error || 'Below threshold' }}",
-                "otherOptions": {}
-            },
-            "id": "node-low-conf-notify",
-            "name": "Slack Low Confidence",
-            "type": "n8n-nodes-base.slack",
-            "typeVersion": 2.1,
-            "position": [
-                1168,
-                400
-            ],
-            "webhookId": "198f8b34-60c1-442d-b695-8580492c0919",
             "disabled": true
         },
         {
@@ -616,7 +516,7 @@
         },
         {
             "parameters": {
-                "jsCode": "const items = $input.all();\nif (items.length === 0) return [];\n\n// --- ROBUST FILTER: Only process items manually marked as \"✅ Approved\" ---\nconst approved = items.filter(item => {\n  const status = item.json['Status'] || '';\n  return status.includes('✅ Approved') || status === '✅ Approved';\n});\n\nif (approved.length === 0) {\n  console.log('No approved items found in this batch.');\n  return [];\n}\n\n// Sort by Engagement Score descending\nconst sorted = approved.sort((a, b) => (parseInt(b.json['Engagement Score']) || 0) - (parseInt(a.json['Engagement Score']) || 0));\n\n// Pick the top one for processing\nconst selected = sorted.slice(0, 1);\n\n// Map headers to internal briefing keys for compatibility\nreturn selected.map(item => ({\n  json: {\n    row_number: item.json.row_number,\n    title: item.json['Title'],\n    text: item.json['Body'],\n    author: item.json['Author'],\n    original_score: item.json['Upvotes'],\n    source_url: item.json['Article Link'] || item.json['URL'],\n    reddit_url: item.json['Reddit Link'],\n    subreddit: item.json['Subreddit'],\n    date: item.json['Date'],\n    status: item.json['Status']\n  }\n}));"
+                "jsCode": "const items = $input.all();\nif (items.length === 0) return [];\n\n// --- ROBUST FILTER: Only process items manually marked as \"\u2705 Approved\" ---\nconst approved = items.filter(item => {\n  const status = item.json['Status'] || '';\n  return status.includes('\u2705 Approved') || status === '\u2705 Approved';\n});\n\nif (approved.length === 0) {\n  console.log('No approved items found in this batch.');\n  return [];\n}\n\n// Sort by Engagement Score descending\nconst sorted = approved.sort((a, b) => (parseInt(b.json['Engagement Score']) || 0) - (parseInt(a.json['Engagement Score']) || 0));\n\n// Pick the top one for processing\nconst selected = sorted.slice(0, 1);\n\n// Map headers to internal briefing keys for compatibility\nreturn selected.map(item => ({\n  json: {\n    row_number: item.json.row_number,\n    title: item.json['Title'],\n    text: item.json['Body'],\n    author: item.json['Author'],\n    original_score: item.json['Upvotes'],\n    source_url: item.json['Article Link'] || item.json['URL'],\n    reddit_url: item.json['Reddit Link'],\n    subreddit: item.json['Subreddit'],\n    date: item.json['Date'],\n    status: item.json['Status']\n  }\n}));"
             },
             "id": "code-pick-top-post",
             "name": "Pick Top Post",
@@ -663,7 +563,7 @@
                 "columns": {
                     "mappingMode": "defineBelow",
                     "value": {
-                        "Status": "📤 Posted"
+                        "Status": "\ud83d\udce4 Posted"
                     }
                 },
                 "options": {}
@@ -699,7 +599,7 @@
                 "columns": {
                     "mappingMode": "defineBelow",
                     "value": {
-                        "Status": "❌ Rejected"
+                        "Status": "\u274c Rejected"
                     }
                 },
                 "options": {}
@@ -731,46 +631,6 @@
                 -496,
                 304
             ]
-        },
-        {
-            "id": "node-tavily-logo",
-            "name": "Tavily Logo Search",
-            "type": "n8n-nodes-base.httpRequest",
-            "typeVersion": 4.2,
-            "position": [
-                1840,
-                252
-            ],
-            "parameters": {
-                "method": "POST",
-                "url": "https://api.tavily.com/search",
-                "sendHeaders": true,
-                "headerParameters": {
-                    "parameters": [
-                        {
-                            "name": "Content-Type",
-                            "value": "application/json"
-                        }
-                    ]
-                },
-                "sendBody": true,
-                "specifyBody": "json",
-                "jsonBody": "={\n  \"api_key\": \"{{ $env.TAVILY_API_KEY }}\",\n  \"query\": \"{{ $json.logo_search_query }}\",\n  \"search_depth\": \"basic\",\n  \"include_images\": true,\n  \"include_image_descriptions\": false,\n  \"max_results\": 6\n}",
-                "options": {}
-            }
-        },
-        {
-            "id": "node-merge-logo",
-            "name": "Merge Logo Data",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [
-                2080,
-                252
-            ],
-            "parameters": {
-                "jsCode": "const tavilyLogoResult = $input.item.json;\nconst rawImages = (tavilyLogoResult.images || []);\nconst existingData = $('Merge Image Data').item.json;\n\nconst companyDomain = existingData.company_domain || '';\nconst subjectName   = existingData.subject_name || '';\n\nconst validLogos = rawImages.filter(url =>\n  typeof url === 'string' && url.length > 12 &&\n  /\\.(png|jpg|jpeg)(\\?|$)/i.test(url) &&\n  !/favicon|\\.ico|sprite|placeholder/i.test(url)\n);\n\nlet logo_base64 = null;\nlet logo_url    = null;\n\nasync function downloadImage(url, minSize) {\n  try {\n    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });\n    if (!res.ok) return null;\n    const buf = Buffer.from(await res.arrayBuffer());\n    const isPng  = buf[0]===0x89 && buf[1]===0x50;\n    const isJpeg = buf[0]===0xFF && buf[1]===0xD8;\n    if (buf.length >= (minSize || 200) && (isPng || isJpeg)) return buf;\n  } catch(e) {}\n  return null;\n}\n\nif (companyDomain) {\n  // Strategy 1: Clearbit — no key, no signup, high quality PNG logos\n  let buf = await downloadImage(`https://logo.clearbit.com/${companyDomain}?size=256`, 200);\n  if (buf) { logo_base64 = buf.toString('base64'); logo_url = `clearbit:${companyDomain}`; }\n\n  // Strategy 2: Google Favicon at 256px — no key, always works\n  if (!logo_base64) {\n    buf = await downloadImage(`https://www.google.com/s2/favicons?domain=${companyDomain}&sz=256`, 100);\n    if (buf) { logo_base64 = buf.toString('base64'); logo_url = `google:${companyDomain}`; }\n  }\n\n  // Strategy 3: DuckDuckGo icon service — no key, no signup\n  if (!logo_base64) {\n    buf = await downloadImage(`https://icons.duckduckgo.com/ip3/${companyDomain}.ico`, 100);\n    if (buf) { logo_base64 = buf.toString('base64'); logo_url = `ddg:${companyDomain}`; }\n  }\n}\n\n// Strategy 4: Tavily image results fallback\nif (!logo_base64) {\n  for (const url of validLogos.slice(0, 5)) {\n    const buf = await downloadImage(url, 500);\n    if (buf) { logo_base64 = buf.toString('base64'); logo_url = url; break; }\n  }\n}\n\nreturn [{\n  json: {\n    ...existingData,\n    logo_base64,\n    logo_url,\n    subject_type:   existingData.subject_type || 'company',\n    subject_name:   subjectName,\n    company_domain: companyDomain\n  }\n}];"
-            }
         }
     ],
     "pinData": {},
@@ -837,7 +697,7 @@
                 ],
                 [
                     {
-                        "node": "Slack Low Confidence",
+                        "node": "Final Summary",
                         "type": "main",
                         "index": 0
                     }
@@ -859,7 +719,7 @@
             "main": [
                 [
                     {
-                        "node": "Tavily Logo Search",
+                        "node": "Has Press Image",
                         "type": "main",
                         "index": 0
                     }
@@ -954,61 +814,7 @@
             "main": [
                 [
                     {
-                        "node": "GDrive Upload",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "GDrive Upload": {
-            "main": [
-                [
-                    {
-                        "node": "Extract Drive URL",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Extract Drive URL": {
-            "main": [
-                [
-                    {
-                        "node": "Merge Drive and Claude Data",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Merge Drive and Claude Data": {
-            "main": [
-                [
-                    {
-                        "node": "Airtable Warehouse",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Airtable Warehouse": {
-            "main": [
-                [
-                    {
-                        "node": "Post LinkedIn",
-                        "type": "main",
-                        "index": 0
-                    },
-                    {
-                        "node": "Facebook Upload Photo",
-                        "type": "main",
-                        "index": 0
-                    },
-                    {
-                        "node": "Mark as Posted",
+                        "node": "Prepare Post Data",
                         "type": "main",
                         "index": 0
                     }
@@ -1019,7 +825,7 @@
             "main": [
                 [
                     {
-                        "node": "Slack Success",
+                        "node": "Final Summary",
                         "type": "main",
                         "index": 0
                     }
@@ -1038,28 +844,6 @@
             ]
         },
         "Facebook Publish Post": {
-            "main": [
-                [
-                    {
-                        "node": "Slack Success",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Slack Success": {
-            "main": [
-                [
-                    {
-                        "node": "Final Summary",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Slack Low Confidence": {
             "main": [
                 [
                     {
@@ -1143,22 +927,21 @@
                 ]
             ]
         },
-        "Tavily Logo Search": {
+        "Prepare Post Data": {
             "main": [
                 [
                     {
-                        "node": "Merge Logo Data",
+                        "node": "Post LinkedIn",
                         "type": "main",
                         "index": 0
-                    }
-                ]
-            ]
-        },
-        "Merge Logo Data": {
-            "main": [
-                [
+                    },
                     {
-                        "node": "Has Press Image",
+                        "node": "Facebook Upload Photo",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Mark as Posted",
                         "type": "main",
                         "index": 0
                     }

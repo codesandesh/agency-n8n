@@ -1,8 +1,12 @@
 const express = require('express');
 const sharp = require('sharp');
-const app = express();
+const https = require('https');
+const http = require('http');
+const { URL } = require('url');
 
+const app = express();
 app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 const SECRET = process.env.SHARP_WORKER_SECRET || '';
 
@@ -19,61 +23,80 @@ function checkAuth(req, res, next) {
 // ── Health check ───────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+// ── Fetch a URL and return a Buffer (follows redirects) ────────
+function fetchBuffer(url, timeoutMs = 7000) {
+  return new Promise((resolve) => {
+    const parsed = new URL(url);
+    const lib = parsed.protocol === 'https:' ? https : http;
+    const req = lib.get(url, { timeout: timeoutMs }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return fetchBuffer(res.headers.location, timeoutMs).then(resolve);
+      }
+      if (res.statusCode !== 200) return resolve(null);
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+    setTimeout(() => { try { req.destroy(); } catch (_) { } resolve(null); }, timeoutMs);
+  });
+}
+
+// ── Fetch logo for a domain (multiple strategies) ─────────────
+async function fetchLogo(domain) {
+  if (!domain) return null;
+
+  // Strategy 1: Clearbit Logo API (best quality, returns PNG)
+  const clearbitUrl = `https://logo.clearbit.com/${domain}?size=300`;
+  console.log(`[logo] Trying clearbit: ${clearbitUrl}`);
+  let buf = await fetchBuffer(clearbitUrl);
+  if (buf && buf.length > 100) {
+    console.log(`[logo] Got from Clearbit: ${buf.length} bytes`);
+    return buf;
+  }
+
+  // Strategy 2: Google Favicon HD (fallback)
+  const googleUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=256`;
+  console.log(`[logo] Trying Google favicon: ${googleUrl}`);
+  buf = await fetchBuffer(googleUrl);
+  if (buf && buf.length > 50) {
+    console.log(`[logo] Got from Google: ${buf.length} bytes`);
+    return buf;
+  }
+
+  console.log(`[logo] All strategies failed for ${domain}`);
+  return null;
+}
+
 // ── Composite endpoint ─────────────────────────────────────────
 // POST /composite
-// Body: { base_image_b64, svg_overlay_b64, logo_b64?, logo_x?, logo_y?, logo_size?, width?, height? }
-// Returns: PNG binary
+// Body: {
+//   base_image_b64, svg_overlay_b64,
+//   logo_b64?,        // pre-fetched logo (optional, takes priority)
+//   company_domain?,  // domain to auto-fetch logo if logo_b64 not provided
+//   logo_x?, logo_y?, logo_size?,
+//   width?, height?
+// }
 app.post('/composite', checkAuth, async (req, res) => {
-  console.log(`[sharp-worker] Received composite request. Base size: ${req.body?.base_image_b64?.length || 0} bytes`);
+  console.log(`[sharp] Composite request. Base: ${req.body?.base_image_b64?.length || 0}B`);
   try {
     const {
       base_image_b64,
       svg_overlay_b64,
-      logo_b64,
-      logo_x = 828,   // cx - r + 8  (cx=918, r=90 as set in SVG code)
-      logo_y = 66,    // cy - r + 8  (cy=148, r=90 as set in SVG code)
-      logo_size = 164, // (r - 8) * 2
       width = 1080,
-      height = 1350
+      height = 1350,
     } = req.body;
 
     if (!base_image_b64) return res.status(400).json({ error: 'Missing base_image_b64' });
     if (!svg_overlay_b64) return res.status(400).json({ error: 'Missing svg_overlay_b64' });
 
     const bgBuffer = Buffer.from(base_image_b64, 'base64');
-    const svgBuffer = Buffer.from(svg_overlay_b64, 'base64'); // raw SVG XML bytes
+    const svgBuffer = Buffer.from(svg_overlay_b64, 'base64');
 
-    // Build composite layers array — SVG overlay is always first
+    // Build composite layers — SVG text overlay only
     const layers = [{ input: svgBuffer, top: 0, left: 0 }];
-
-    // If a logo is provided, composite it separately as a rasterized image
-    // This bypasses librsvg's inability to render embedded base64 <image> tags
-    if (logo_b64) {
-      try {
-        const logoRaw = Buffer.from(logo_b64, 'base64');
-        // Resize the logo to fit the badge circle (logo_size x logo_size), keep aspect ratio
-        const logoResized = await sharp(logoRaw)
-          .resize(logo_size, logo_size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-          .png()
-          .toBuffer();
-
-        // Clip logo to circle using a circular mask
-        const circleMask = Buffer.from(
-          `<svg width="${logo_size}" height="${logo_size}">` +
-          `<circle cx="${logo_size / 2}" cy="${logo_size / 2}" r="${logo_size / 2}" fill="white"/>` +
-          `</svg>`
-        );
-        const logoCircle = await sharp(logoResized)
-          .composite([{ input: circleMask, blend: 'dest-in' }])
-          .png()
-          .toBuffer();
-
-        layers.push({ input: logoCircle, top: logo_y, left: logo_x, blend: 'over' });
-        console.log(`[sharp-worker] Logo composited at (${logo_x}, ${logo_y}) size=${logo_size}px`);
-      } catch (logoErr) {
-        console.warn('[sharp-worker] Logo composite failed (skipping):', logoErr.message);
-      }
-    }
 
     const finalPng = await sharp(bgBuffer)
       .resize(width, height, { fit: 'cover', position: 'top' })
@@ -86,7 +109,7 @@ app.post('/composite', checkAuth, async (req, res) => {
     res.send(finalPng);
 
   } catch (err) {
-    console.error('[sharp-worker] composite error:', err.message);
+    console.error('[sharp] composite error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
