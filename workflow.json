@@ -1,0 +1,3760 @@
+[
+  {
+    "name": "DealHunter - 00 Database Setup",
+    "nodes": [
+      {
+        "parameters": {},
+        "id": "wf00-trigger",
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"; CREATE EXTENSION IF NOT EXISTS pg_trgm;",
+          "options": {}
+        },
+        "id": "wf00-ext",
+        "name": "Create Extensions",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          490,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "CREATE TABLE IF NOT EXISTS opportunities (\n  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),\n  title TEXT,\n  description TEXT,\n  source TEXT,\n  source_url TEXT,\n  source_id TEXT,\n  company_name TEXT,\n  contact_name TEXT,\n  contact_email TEXT,\n  contact_phone TEXT,\n  estimated_budget_low FLOAT,\n  estimated_budget_high FLOAT,\n  deadline DATE,\n  location TEXT,\n  industry TEXT,\n  relevance_score FLOAT,\n  budget_score FLOAT,\n  urgency_score FLOAT,\n  win_probability FLOAT,\n  overall_score FLOAT,\n  ai_summary TEXT,\n  ai_tags JSONB,\n  ai_reasoning TEXT,\n  status TEXT DEFAULT 'new' CHECK (status IN ('new','reviewed','contacted','qualified','disqualified','won','lost')),\n  is_notified BOOLEAN DEFAULT false,\n  discovered_at TIMESTAMPTZ DEFAULT NOW(),\n  posted_at TIMESTAMPTZ,\n  updated_at TIMESTAMPTZ DEFAULT NOW(),\n  raw_data JSONB\n);",
+          "options": {}
+        },
+        "id": "wf00-opp",
+        "name": "Create Opportunities Table",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "CREATE TABLE IF NOT EXISTS sources (\n  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),\n  name TEXT,\n  type TEXT CHECK (type IN ('api','scrape','rss')),\n  url TEXT,\n  is_active BOOLEAN DEFAULT true,\n  last_scraped_at TIMESTAMPTZ,\n  scrape_frequency_minutes INT,\n  config JSONB,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\nCREATE TABLE IF NOT EXISTS scrape_logs (\n  id SERIAL PRIMARY KEY,\n  source_name TEXT,\n  started_at TIMESTAMPTZ,\n  finished_at TIMESTAMPTZ,\n  status TEXT CHECK (status IN ('success','failed','partial')),\n  items_found INT,\n  items_new INT,\n  items_scored INT,\n  error_message TEXT,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\nCREATE TABLE IF NOT EXISTS staging_raw (\n  id SERIAL PRIMARY KEY,\n  raw_opportunity JSONB,\n  source TEXT,\n  is_processed BOOLEAN DEFAULT false,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);",
+          "options": {}
+        },
+        "id": "wf00-other",
+        "name": "Create Other Tables",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "CREATE INDEX IF NOT EXISTS idx_opp_score ON opportunities(overall_score DESC);\nCREATE INDEX IF NOT EXISTS idx_opp_status ON opportunities(status);\nCREATE INDEX IF NOT EXISTS idx_opp_discovered ON opportunities(discovered_at DESC);\nCREATE INDEX IF NOT EXISTS idx_opp_source ON opportunities(source, source_id);\nCREATE INDEX IF NOT EXISTS idx_opp_title_trgm ON opportunities USING gin(title gin_trgm_ops);\nCREATE INDEX IF NOT EXISTS idx_staging_processed ON staging_raw(is_processed) WHERE is_processed = false;",
+          "options": {}
+        },
+        "id": "wf00-idx",
+        "name": "Create Indexes",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{json: {message: 'Database setup complete. All tables and indexes created successfully.'}}];"
+        },
+        "id": "wf00-done",
+        "name": "Setup Complete",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1490,
+          300
+        ]
+      }
+    ],
+    "connections": {
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "Create Extensions",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Extensions": {
+        "main": [
+          [
+            {
+              "node": "Create Opportunities Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Opportunities Table": {
+        "main": [
+          [
+            {
+              "node": "Create Other Tables",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Other Tables": {
+        "main": [
+          [
+            {
+              "node": "Create Indexes",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Indexes": {
+        "main": [
+          [
+            {
+              "node": "Setup Complete",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-00"
+  },
+  {
+    "name": "DealHunter - 01 Upwork RSS Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 30
+              }
+            ]
+          }
+        },
+        "id": "wf01-trigger",
+        "name": "Every 30 Minutes",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const queries = [\n  'custom software development',\n  'AI ML development',\n  'python developer project',\n  'full stack development project',\n  'computer vision project',\n  'enterprise application development',\n  'SaaS development',\n  'workflow automation'\n];\nreturn queries.map(q => ({json: {query: q, encodedQuery: encodeURIComponent(q)}}));"
+        },
+        "id": "wf01-queries",
+        "name": "Build Query List",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://www.upwork.com/ab/feed/jobs/rss?q={{ $json.encodedQuery }}&sort=recency",
+          "options": {}
+        },
+        "id": "wf01-rss",
+        "name": "Fetch RSS Feed",
+        "type": "n8n-nodes-base.rssFeedRead",
+        "typeVersion": 1,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "amount": 12,
+          "unit": "seconds"
+        },
+        "id": "wf01-wait",
+        "name": "Rate Limit Wait",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1,
+        "position": [
+          740,
+          500
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\nfor (const item of items) {\n  try {\n    const entry = item.json;\n    const budgetMatch = (entry.content || entry.description || '').match(/\\$([\\d,]+)/);\n    const budget = budgetMatch ? parseFloat(budgetMatch[1].replace(/,/g, '')) : null;\n    results.push({\n      json: {\n        title: entry.title || '',\n        description: entry.content || entry.contentSnippet || entry.description || '',\n        source: 'upwork',\n        source_url: entry.link || entry.url || '',\n        source_id: entry.guid || entry.id || entry.link || '',\n        posted_at: entry.pubDate || entry.isoDate || new Date().toISOString(),\n        company_name: null,\n        contact_email: null,\n        estimated_budget: budget,\n        deadline: null,\n        location: null,\n        tags: ['upwork', 'freelance'],\n        raw_data: entry\n      }\n    });\n  } catch(e) {\n    // skip malformed entries\n  }\n}\nreturn results;"
+        },
+        "id": "wf01-normalize",
+        "name": "Normalize RSS Items",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'upwork', false) ON CONFLICT DO NOTHING;",
+          "options": {}
+        },
+        "id": "wf01-stage",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE sources SET last_scraped_at = NOW() WHERE name = 'upwork';",
+          "options": {}
+        },
+        "id": "wf01-log",
+        "name": "Update Source Timestamp",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          1490,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 30 Minutes": {
+        "main": [
+          [
+            {
+              "node": "Build Query List",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Query List": {
+        "main": [
+          [
+            {
+              "node": "Fetch RSS Feed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch RSS Feed": {
+        "main": [
+          [
+            {
+              "node": "Normalize RSS Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize RSS Items": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert to Staging": {
+        "main": [
+          [
+            {
+              "node": "Update Source Timestamp",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-01"
+  },
+  {
+    "name": "DealHunter - 02 Reddit API Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 30
+              }
+            ]
+          }
+        },
+        "id": "dh-reddit-01",
+        "name": "Every 30 Minutes",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://www.reddit.com/api/v1/access_token",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "name": "User-Agent",
+                "value": "DealHunter/1.0"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Basic {{ Buffer.from($env.REDDIT_CLIENT_ID + ':' + $env.REDDIT_CLIENT_SECRET).toString('base64') }}"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "form-urlencoded",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "grant_type",
+                "value": "client_credentials"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "dh-reddit-02",
+        "name": "Reddit OAuth Token",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const token = $json.access_token;\nconst subreddits = [\n  {name: 'forhire', hireFlair: true},\n  {name: 'startups', hireFlair: false},\n  {name: 'SaaS', hireFlair: false},\n  {name: 'smallbusiness', hireFlair: false},\n  {name: 'Entrepreneur', hireFlair: false},\n  {name: 'cofounder', hireFlair: false},\n  {name: 'MachineLearning', hireFlair: false},\n  {name: 'artificial', hireFlair: false},\n  {name: 'webdev', hireFlair: false},\n  {name: 'AppIdeas', hireFlair: false},\n  {name: 'hwstartups', hireFlair: false},\n  {name: 'iOSProgramming', hireFlair: false},\n  {name: 'androiddev', hireFlair: false},\n  {name: 'devops', hireFlair: false},\n  {name: 'CTO', hireFlair: false},\n  {name: 'nocode', hireFlair: false},\n  {name: 'lowcode', hireFlair: false}\n];\n// Attach the bearer token to each subreddit item so it survives through Split In Batches\nreturn subreddits.map(s => ({json: {...s, access_token: token}}));"
+        },
+        "id": "dh-reddit-03",
+        "name": "Build Subreddit List",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "batchSize": 1,
+          "options": {}
+        },
+        "id": "dh-reddit-04",
+        "name": "Split In Batches",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "amount": 2,
+          "unit": "seconds"
+        },
+        "id": "dh-reddit-05",
+        "name": "Rate Limit Wait",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1,
+        "position": [
+          1240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "=https://oauth.reddit.com/r/{{ $json.name }}/new.json",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $json.access_token }}"
+              },
+              {
+                "name": "User-Agent",
+                "value": "DealHunter/1.0"
+              }
+            ]
+          },
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "limit",
+                "value": "50"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "dh-reddit-06",
+        "name": "Fetch Subreddit Posts",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const KEYWORDS = [\n  'looking for developer', 'need app built', 'looking for agency',\n  'need software built', 'technical cofounder', 'outsource development',\n  'MVP development', 'looking for AI', 'need automation', 'RFP',\n  'hiring team', 'outgrown Bubble', 'need custom code',\n  'migrate from no-code', 'budget'\n];\n\nconst response = $json;\nconst subredditName = $('Split In Batches').item.json.name;\nconst hireFlair = $('Split In Batches').item.json.hireFlair;\n\nif (!response.data || !response.data.children) {\n  return [{json: {skipped: true, reason: 'no_data', subreddit: subredditName}}];\n}\n\nconst posts = response.data.children;\nconst results = [];\n\nfor (const post of posts) {\n  const p = post.data;\n  if (!p || p.is_self === false && !p.selftext) continue;\n  \n  // r/forhire: only [Hiring] flair\n  if (hireFlair && (!p.link_flair_text || !p.link_flair_text.includes('Hiring'))) continue;\n  \n  const text = ((p.title || '') + ' ' + (p.selftext || '')).toLowerCase();\n  \n  // For non-forhire subs, keyword filter\n  if (!hireFlair) {\n    const hasKeyword = KEYWORDS.some(kw => text.includes(kw.toLowerCase()));\n    if (!hasKeyword) continue;\n  }\n  \n  results.push({\n    json: {\n      title: p.title || '',\n      description: p.selftext || '',\n      source: 'reddit_' + subredditName,\n      source_url: 'https://reddit.com' + p.permalink,\n      source_id: p.id,\n      posted_at: new Date(p.created_utc * 1000).toISOString(),\n      company_name: p.author || '',\n      contact_email: null,\n      estimated_budget: null,\n      deadline: null,\n      location: null,\n      tags: [subredditName, p.link_flair_text || ''].filter(Boolean),\n      raw_data: p\n    }\n  });\n}\n\nif (results.length === 0) {\n  return [{json: {skipped: true, reason: 'no_matching_posts', subreddit: subredditName}}];\n}\nreturn results;"
+        },
+        "id": "dh-reddit-07",
+        "name": "Filter & Normalize Posts",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.skipped }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "notEquals"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "dh-reddit-08",
+        "name": "Has Valid Posts",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed)\nVALUES ('{{ JSON.stringify($json) }}'::jsonb, '{{ $json.source }}', false)\nON CONFLICT DO NOTHING;",
+          "options": {}
+        },
+        "id": "dh-reddit-09",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          2240,
+          200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "pg-cred-1",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "dh-reddit-10",
+        "name": "Skip",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          2240,
+          420
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE sources SET last_scraped_at = NOW() WHERE name = 'reddit';",
+          "options": {}
+        },
+        "id": "dh-reddit-11",
+        "name": "Update Source Timestamp",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          2490,
+          200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "pg-cred-1",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 30 Minutes": {
+        "main": [
+          [
+            {
+              "node": "Reddit OAuth Token",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Reddit OAuth Token": {
+        "main": [
+          [
+            {
+              "node": "Build Subreddit List",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Subreddit List": {
+        "main": [
+          [
+            {
+              "node": "Split In Batches",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split In Batches": {
+        "main": [
+          [
+            {
+              "node": "Rate Limit Wait",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Rate Limit Wait": {
+        "main": [
+          [
+            {
+              "node": "Fetch Subreddit Posts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Subreddit Posts": {
+        "main": [
+          [
+            {
+              "node": "Filter & Normalize Posts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filter & Normalize Posts": {
+        "main": [
+          [
+            {
+              "node": "Has Valid Posts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Valid Posts": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Skip",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert to Staging": {
+        "main": [
+          [
+            {
+              "node": "Update Source Timestamp",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-02"
+  },
+  {
+    "name": "DealHunter - 03 Hacker News Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 60
+              }
+            ]
+          }
+        },
+        "id": "wf03-trigger",
+        "name": "Every 60 Minutes",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "https://hn.algolia.com/api/v1/search_by_date",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "query",
+                "value": "Ask HN: Who is hiring"
+              },
+              {
+                "name": "tags",
+                "value": "story"
+              },
+              {
+                "name": "hitsPerPage",
+                "value": "20"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "wf03-hiring",
+        "name": "Fetch Who Is Hiring",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          490,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "https://hn.algolia.com/api/v1/search_by_date",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "query",
+                "value": "looking for developer need to build hiring contractor looking for agency"
+              },
+              {
+                "name": "tags",
+                "value": "story,ask_hn"
+              },
+              {
+                "name": "hitsPerPage",
+                "value": "50"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "wf03-ask",
+        "name": "Fetch Ask HN Posts",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          490,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "combine",
+          "combinationMode": "mergeByIndex",
+          "options": {
+            "includeUnpaired": true
+          }
+        },
+        "id": "wf03-merge",
+        "name": "Merge Results",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\nconst seen = new Set();\n\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const hits = data.hits || [];\n    for (const hit of hits) {\n      if (seen.has(hit.objectID)) continue;\n      seen.add(hit.objectID);\n      results.push({\n        json: {\n          title: hit.title || '',\n          description: hit.story_text || hit._highlightResult?.story_text?.value || '',\n          source: 'hackernews',\n          source_url: hit.url || 'https://news.ycombinator.com/item?id=' + hit.objectID,\n          source_id: hit.objectID || '',\n          posted_at: hit.created_at || new Date().toISOString(),\n          company_name: null,\n          contact_email: null,\n          estimated_budget: null,\n          deadline: null,\n          location: null,\n          tags: ['hackernews', 'hn'],\n          raw_data: hit\n        }\n      });\n    }\n  } catch(e) {}\n}\nreturn results.length > 0 ? results : [{json: {empty: true}}];"
+        },
+        "id": "wf03-normalize",
+        "name": "Normalize HN Items",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'hackernews', false);",
+          "options": {}
+        },
+        "id": "wf03-stage",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 60 Minutes": {
+        "main": [
+          [
+            {
+              "node": "Fetch Who Is Hiring",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch Ask HN Posts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Who Is Hiring": {
+        "main": [
+          [
+            {
+              "node": "Merge Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Ask HN Posts": {
+        "main": [
+          [
+            {
+              "node": "Merge Results",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge Results": {
+        "main": [
+          [
+            {
+              "node": "Normalize HN Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize HN Items": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-03"
+  },
+  {
+    "name": "DealHunter - 04 Clutch Playwright Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 60
+              }
+            ]
+          }
+        },
+        "id": "wf04-trigger",
+        "name": "Every 60 Minutes",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const categories = [\n  {name: 'AI Development', url: 'https://clutch.co/ai-companies'},\n  {name: 'Custom Software Development', url: 'https://clutch.co/software-developers'},\n  {name: 'Web Development', url: 'https://clutch.co/web-developers'},\n  {name: 'Mobile App Development', url: 'https://clutch.co/app-developers'}\n];\nconst userAgents = [\n  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/118.0.0.0 Safari/537.36'\n];\nreturn categories.map((cat, i) => ({\n  json: {\n    ...cat,\n    userAgent: userAgents[i % userAgents.length]\n  }\n}));"
+        },
+        "id": "wf04-cats",
+        "name": "Build Category List",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.PLAYWRIGHT_SERVICE_URL || 'http://playwright-service:3000' }}/scrape",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "json",
+          "jsonBody": "={{ JSON.stringify({url: $json.url, userAgent: $json.userAgent, waitFor: '.provider-list-item', extractScript: 'return Array.from(document.querySelectorAll(\".provider-list-item\")).map(el => ({title: el.querySelector(\".company_info h3\")?.innerText || \"\", url: el.querySelector(\"a\")?.href || \"\", description: el.querySelector(\".tagline\")?.innerText || \"\", location: el.querySelector(\".locality\")?.innerText || \"\", reviews: el.querySelector(\".total-reviews\")?.innerText || \"\"}))'}) }}",
+          "options": {}
+        },
+        "id": "wf04-scrape",
+        "name": "Playwright Scrape",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "amount": 12,
+          "unit": "seconds"
+        },
+        "id": "wf04-wait",
+        "name": "Rate Limit",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1,
+        "position": [
+          740,
+          500
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const entries = Array.isArray(data) ? data : (data.results || data.data || []);\n    for (const entry of entries) {\n      if (!entry.title) continue;\n      results.push({\n        json: {\n          title: entry.title || '',\n          description: entry.description || '',\n          source: 'clutch',\n          source_url: entry.url || '',\n          source_id: entry.url || entry.title || '',\n          posted_at: new Date().toISOString(),\n          company_name: entry.title || null,\n          contact_email: null,\n          estimated_budget: null,\n          deadline: null,\n          location: entry.location || null,\n          tags: ['clutch', 'agency'],\n          raw_data: entry\n        }\n      });\n    }\n  } catch(e) {}\n}\nreturn results.length > 0 ? results : [{json: {empty: true}}];"
+        },
+        "id": "wf04-normalize",
+        "name": "Normalize Results",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'clutch', false);",
+          "options": {}
+        },
+        "id": "wf04-stage",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 60 Minutes": {
+        "main": [
+          [
+            {
+              "node": "Build Category List",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Category List": {
+        "main": [
+          [
+            {
+              "node": "Playwright Scrape",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Playwright Scrape": {
+        "main": [
+          [
+            {
+              "node": "Normalize Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Results": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-04"
+  },
+  {
+    "name": "DealHunter - 05 Freelancer API Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 60
+              }
+            ]
+          }
+        },
+        "id": "wf05-trigger",
+        "name": "Every 60 Minutes",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "https://www.freelancer.com/api/projects/0.1/projects/active/",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "job_ids[]",
+                "value": "3"
+              },
+              {
+                "name": "job_ids[]",
+                "value": "9"
+              },
+              {
+                "name": "job_ids[]",
+                "value": "13"
+              },
+              {
+                "name": "sort_field",
+                "value": "time_submitted"
+              },
+              {
+                "name": "limit",
+                "value": "50"
+              },
+              {
+                "name": "full_description",
+                "value": "true"
+              },
+              {
+                "name": "compact",
+                "value": "false"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "wf05-fetch",
+        "name": "Fetch Active Projects",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const projects = data.result && data.result.projects ? data.result.projects : [];\n    for (const p of projects) {\n      results.push({\n        json: {\n          title: p.title || '',\n          description: p.description || '',\n          source: 'freelancer',\n          source_url: 'https://www.freelancer.com/projects/' + (p.seo_url || p.id || ''),\n          source_id: String(p.id || ''),\n          posted_at: p.time_submitted ? new Date(p.time_submitted * 1000).toISOString() : new Date().toISOString(),\n          company_name: null,\n          contact_email: null,\n          estimated_budget: p.budget ? (p.budget.minimum || null) : null,\n          deadline: null,\n          location: p.location ? p.location.country_name : null,\n          tags: ['freelancer', ...(p.jobs ? p.jobs.map(j => j.name || '') : [])],\n          raw_data: p\n        }\n      });\n    }\n  } catch(e) {}\n}\nreturn results.length > 0 ? results : [{json: {empty: true}}];"
+        },
+        "id": "wf05-normalize",
+        "name": "Normalize Projects",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'freelancer', false);",
+          "options": {}
+        },
+        "id": "wf05-stage",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 60 Minutes": {
+        "main": [
+          [
+            {
+              "node": "Fetch Active Projects",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Active Projects": {
+        "main": [
+          [
+            {
+              "node": "Normalize Projects",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Projects": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-05"
+  },
+  {
+    "name": "DealHunter - 06 Twitter X API Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 60
+              }
+            ]
+          }
+        },
+        "id": "wf06-trigger",
+        "name": "Every 60 Minutes",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "https://api.twitter.com/2/tweets/search/recent",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.X_API_BEARER_TOKEN }}"
+              }
+            ]
+          },
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "query",
+                "value": "(\"looking for developer\" OR \"need app built\" OR \"looking for agency\" OR \"need CTO\" OR \"building MVP\" OR \"looking for technical\") -is:retweet -is:reply lang:en"
+              },
+              {
+                "name": "max_results",
+                "value": "100"
+              },
+              {
+                "name": "tweet.fields",
+                "value": "created_at,author_id,text,entities,public_metrics"
+              },
+              {
+                "name": "expansions",
+                "value": "author_id"
+              },
+              {
+                "name": "user.fields",
+                "value": "name,username,description,location"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "wf06-fetch",
+        "name": "Search Recent Tweets",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const tweets = data.data || [];\n    const users = {};\n    if (data.includes && data.includes.users) {\n      for (const u of data.includes.users) {\n        users[u.id] = u;\n      }\n    }\n    for (const tweet of tweets) {\n      const author = users[tweet.author_id] || {};\n      results.push({\n        json: {\n          title: tweet.text ? tweet.text.substring(0, 100) : '',\n          description: tweet.text || '',\n          source: 'twitter',\n          source_url: 'https://twitter.com/i/web/status/' + tweet.id,\n          source_id: tweet.id || '',\n          posted_at: tweet.created_at || new Date().toISOString(),\n          company_name: author.name || null,\n          contact_email: null,\n          estimated_budget: null,\n          deadline: null,\n          location: author.location || null,\n          tags: ['twitter', 'x'],\n          raw_data: {tweet, author}\n        }\n      });\n    }\n  } catch(e) {}\n}\nreturn results.length > 0 ? results : [{json: {empty: true}}];"
+        },
+        "id": "wf06-normalize",
+        "name": "Normalize Tweets",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'twitter', false);",
+          "options": {}
+        },
+        "id": "wf06-stage",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 60 Minutes": {
+        "main": [
+          [
+            {
+              "node": "Search Recent Tweets",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Search Recent Tweets": {
+        "main": [
+          [
+            {
+              "node": "Normalize Tweets",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Tweets": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-06"
+  },
+  {
+    "name": "DealHunter - 07 LinkedIn Google Proxy Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 120
+              }
+            ]
+          }
+        },
+        "id": "wf07-trigger",
+        "name": "Every 2 Hours",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const queries = [\n  'site:linkedin.com/posts \"looking for a tech partner\"',\n  'site:linkedin.com/posts \"need a development team\"',\n  'site:linkedin.com/posts \"evaluating vendors\"',\n  'site:linkedin.com/posts \"looking for software development\"',\n  'site:linkedin.com/posts \"need custom software\"'\n];\nreturn queries.map(q => ({json: {query: q}}));"
+        },
+        "id": "wf07-queries",
+        "name": "Build Query List",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "https://serpapi.com/search",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "={{ $json.query }}"
+              },
+              {
+                "name": "api_key",
+                "value": "={{ $env.SERPAPI_KEY }}"
+              },
+              {
+                "name": "engine",
+                "value": "google"
+              },
+              {
+                "name": "num",
+                "value": "10"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "wf07-serp",
+        "name": "SerpAPI Search",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "amount": 6,
+          "unit": "seconds"
+        },
+        "id": "wf07-wait",
+        "name": "Rate Limit",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1,
+        "position": [
+          740,
+          500
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const organicResults = data.organic_results || [];\n    for (const r of organicResults) {\n      if (!r.link || !r.link.includes('linkedin.com')) continue;\n      results.push({\n        json: {\n          title: r.title || '',\n          description: r.snippet || '',\n          source: 'linkedin_proxy',\n          source_url: r.link || '',\n          source_id: r.link || '',\n          posted_at: new Date().toISOString(),\n          company_name: null,\n          contact_email: null,\n          estimated_budget: null,\n          deadline: null,\n          location: null,\n          tags: ['linkedin', 'google_proxy'],\n          raw_data: r\n        }\n      });\n    }\n  } catch(e) {}\n}\nreturn results.length > 0 ? results : [{json: {empty: true}}];"
+        },
+        "id": "wf07-normalize",
+        "name": "Normalize Results",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'linkedin_proxy', false);",
+          "options": {}
+        },
+        "id": "wf07-stage",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 2 Hours": {
+        "main": [
+          [
+            {
+              "node": "Build Query List",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Query List": {
+        "main": [
+          [
+            {
+              "node": "SerpAPI Search",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SerpAPI Search": {
+        "main": [
+          [
+            {
+              "node": "Normalize Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Results": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-07"
+  },
+  {
+    "name": "DealHunter - 08 Crunchbase Funding Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 6 * * *"
+              }
+            ]
+          }
+        },
+        "id": "wf08-trigger",
+        "name": "Daily at 6 AM",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.crunchbase.com/api/v4/searches/organizations",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "X-cb-user-key",
+                "value": "={{ $env.CRUNCHBASE_API_KEY }}"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "json",
+          "jsonBody": "={\"field_ids\":[\"identifier\",\"short_description\",\"location_identifiers\",\"num_employees_enum\",\"funding_total\",\"last_funding_at\",\"last_funding_type\",\"last_funding_total\",\"categories\",\"homepage_url\",\"linkedin\"],\"order\":[{\"field_id\":\"last_funding_at\",\"sort\":\"desc\"}],\"query\":[{\"type\":\"predicate\",\"field_id\":\"last_funding_at\",\"operator_id\":\"gte\",\"values\":[\"{{ new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0] }}\"]},{\"type\":\"predicate\",\"field_id\":\"last_funding_total\",\"operator_id\":\"gte\",\"values\":[\"2000000\"]},{\"type\":\"predicate\",\"field_id\":\"last_funding_total\",\"operator_id\":\"lte\",\"values\":[\"50000000\"]},{\"type\":\"predicate\",\"field_id\":\"facet_ids\",\"operator_id\":\"includes\",\"values\":[\"company\"]}],\"limit\":50}",
+          "options": {}
+        },
+        "id": "wf08-fetch",
+        "name": "Search Funded Orgs",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const entities = data.entities || [];\n    for (const entity of entities) {\n      const props = entity.properties || {};\n      const name = props.identifier ? props.identifier.value : 'Unknown';\n      const funding = props.last_funding_total ? props.last_funding_total.value_usd : null;\n      const desc = props.short_description || '';\n      const cats = props.categories ? props.categories.map(c => c.value) : [];\n      const isRelevant = cats.some(c => ['Artificial Intelligence','Machine Learning','Software','Enterprise Software','Developer Tools','SaaS'].some(r => c.includes(r)));\n      if (!isRelevant && !desc.toLowerCase().includes('software') && !desc.toLowerCase().includes('ai') && !desc.toLowerCase().includes('tech')) continue;\n      results.push({\n        json: {\n          title: `${name} - Recently Funded ${funding ? '($' + (funding/1000000).toFixed(1) + 'M)' : ''}`,\n          description: `${desc}\\n\\nFunding: $${funding ? (funding/1000000).toFixed(1) + 'M' : 'Unknown'} | Categories: ${cats.join(', ')}\\n\\nHigh-probability lead: Recently funded company likely needs technical team expansion.`,\n          source: 'crunchbase',\n          source_url: entity.permalink ? 'https://www.crunchbase.com' + entity.permalink : '',\n          source_id: entity.uuid || '',\n          posted_at: props.last_funding_at || new Date().toISOString(),\n          company_name: name,\n          contact_email: null,\n          estimated_budget: funding ? Math.min(funding * 0.1, 500000) : null,\n          deadline: null,\n          location: props.location_identifiers ? props.location_identifiers.map(l => l.value).join(', ') : null,\n          tags: ['crunchbase', 'funded', ...cats.slice(0,3)],\n          raw_data: props\n        }\n      });\n    }\n  } catch(e) {}\n}\nreturn results.length > 0 ? results : [{json: {empty: true}}];"
+        },
+        "id": "wf08-normalize",
+        "name": "Normalize Funding Data",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'crunchbase', false);",
+          "options": {}
+        },
+        "id": "wf08-stage",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Daily at 6 AM": {
+        "main": [
+          [
+            {
+              "node": "Search Funded Orgs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Search Funded Orgs": {
+        "main": [
+          [
+            {
+              "node": "Normalize Funding Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Funding Data": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-08"
+  },
+  {
+    "name": "DealHunter - 09 No-Code Community Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 120
+              }
+            ]
+          }
+        },
+        "id": "wf09-trigger",
+        "name": "Every 2 Hours",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "https://forum.bubble.io/latest.json",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "no_definitions",
+                "value": "true"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "wf09-bubble",
+        "name": "Fetch Bubble Forum",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          490,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "https://forum.webflow.com/latest.json",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "no_definitions",
+                "value": "true"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "wf09-webflow",
+        "name": "Fetch Webflow Forum",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          490,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "combine",
+          "combinationMode": "mergeByIndex",
+          "options": {
+            "includeUnpaired": true
+          }
+        },
+        "id": "wf09-merge",
+        "name": "Merge Forums",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const KEYWORDS = [\n  'outgrown bubble', 'too slow', 'need custom functionality',\n  'migrate to custom code', 'bubble limitations', 'need a real developer',\n  'scaling issues', 'performance issues', 'hitting limits', 'custom backend',\n  'beyond no-code', 'native code', 'developer help'\n];\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const topics = data.topic_list && data.topic_list.topics ? data.topic_list.topics : [];\n    const isWebflow = item.json._source === 'webflow';\n    const forumName = isWebflow ? 'webflow' : 'bubble';\n    \n    for (const topic of topics) {\n      const text = ((topic.title || '') + ' ' + (topic.excerpt || '')).toLowerCase();\n      const hasKeyword = KEYWORDS.some(kw => text.includes(kw.toLowerCase()));\n      if (!hasKeyword) continue;\n      \n      const baseUrl = forumName === 'webflow' ? 'https://forum.webflow.com' : 'https://forum.bubble.io';\n      results.push({\n        json: {\n          title: topic.title || '',\n          description: topic.excerpt || '',\n          source: 'nocode_community',\n          source_url: baseUrl + '/t/' + (topic.slug || topic.id || ''),\n          source_id: String(topic.id || ''),\n          posted_at: topic.created_at || new Date().toISOString(),\n          company_name: null,\n          contact_email: null,\n          estimated_budget: null,\n          deadline: null,\n          location: null,\n          tags: ['nocode', forumName, 'migration_lead'],\n          raw_data: topic\n        }\n      });\n    }\n  } catch(e) {}\n}\nreturn results.length > 0 ? results : [{json: {empty: true}}];"
+        },
+        "id": "wf09-filter",
+        "name": "Filter by Keywords",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'nocode_community', false);",
+          "options": {}
+        },
+        "id": "wf09-stage",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 2 Hours": {
+        "main": [
+          [
+            {
+              "node": "Fetch Bubble Forum",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch Webflow Forum",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Bubble Forum": {
+        "main": [
+          [
+            {
+              "node": "Merge Forums",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Webflow Forum": {
+        "main": [
+          [
+            {
+              "node": "Merge Forums",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge Forums": {
+        "main": [
+          [
+            {
+              "node": "Filter by Keywords",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filter by Keywords": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-09"
+  },
+  {
+    "name": "DealHunter - 10 RFP Platforms Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 120
+              }
+            ]
+          }
+        },
+        "id": "wf10-trigger",
+        "name": "Every 2 Hours",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const platforms = [\n  {name: 'goodfirms', url: 'https://www.goodfirms.co/research/rfp', waitFor: '.rfp-item'},\n  {name: 'rfpzone', url: 'https://www.rfpzone.com/category/information-technology', waitFor: '.post-item'},\n  {name: 'findrfp', url: 'https://www.findrfp.com/search.aspx?type=corporate', waitFor: '.rfp-listing'},\n  {name: 'getprojects', url: 'https://getprojects.ai/listings', waitFor: '.project-card'}\n];\nreturn platforms.map(p => ({json: p}));"
+        },
+        "id": "wf10-platforms",
+        "name": "Build Platform List",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.PLAYWRIGHT_SERVICE_URL || 'http://playwright-service:3000' }}/scrape",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "json",
+          "jsonBody": "={{ JSON.stringify({url: $json.url, waitFor: $json.waitFor, timeout: 30000, extractScript: 'return Array.from(document.querySelectorAll(\".rfp-item, .post-item, .rfp-listing, .project-card, article, .listing-item\")).slice(0,20).map(el => ({title: el.querySelector(\"h2, h3, .title, .rfp-title\")?.innerText?.trim() || \"\", description: el.querySelector(\".description, .excerpt, p, .summary\")?.innerText?.trim() || \"\", url: el.querySelector(\"a\")?.href || \"\", budget: el.querySelector(\".budget, .value, .price\")?.innerText?.trim() || \"\", deadline: el.querySelector(\".deadline, .due-date, .date\")?.innerText?.trim() || \"\"}))'}) }}",
+          "options": {}
+        },
+        "id": "wf10-scrape",
+        "name": "Scrape RFP Platform",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "amount": 30,
+          "unit": "seconds"
+        },
+        "id": "wf10-wait",
+        "name": "Rate Limit",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1,
+        "position": [
+          740,
+          500
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const entries = Array.isArray(data) ? data : (data.results || data.data || []);\n    const source = item.json._platformName || 'rfp_platform';\n    for (const entry of entries) {\n      if (!entry.title || entry.title.length < 5) continue;\n      let budgetLow = null;\n      if (entry.budget) {\n        const match = entry.budget.match(/\\$?([\\d,]+)/);\n        if (match) budgetLow = parseFloat(match[1].replace(/,/g, ''));\n      }\n      results.push({\n        json: {\n          title: entry.title || '',\n          description: entry.description || '',\n          source: 'rfp_platform',\n          source_url: entry.url || '',\n          source_id: entry.url || entry.title || '',\n          posted_at: new Date().toISOString(),\n          company_name: null,\n          contact_email: null,\n          estimated_budget: budgetLow,\n          deadline: entry.deadline || null,\n          location: null,\n          tags: ['rfp', source],\n          raw_data: entry\n        }\n      });\n    }\n  } catch(e) {}\n}\nreturn results.length > 0 ? results : [{json: {empty: true}}];"
+        },
+        "id": "wf10-normalize",
+        "name": "Normalize RFP Items",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'rfp_platform', false);",
+          "options": {}
+        },
+        "id": "wf10-stage",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 2 Hours": {
+        "main": [
+          [
+            {
+              "node": "Build Platform List",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Platform List": {
+        "main": [
+          [
+            {
+              "node": "Scrape RFP Platform",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Scrape RFP Platform": {
+        "main": [
+          [
+            {
+              "node": "Normalize RFP Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize RFP Items": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-10"
+  },
+  {
+    "name": "DealHunter - 11 Google Alerts SerpAPI Scraper",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 120
+              }
+            ]
+          }
+        },
+        "id": "wf11-trigger",
+        "name": "Every 2 Hours",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const queries = [\n  '\"request for proposal\" \"software development\" -government',\n  '\"looking for AI development company\"',\n  '\"evaluating software vendors\" site:linkedin.com',\n  '\"ISO software development partner\" -government',\n  '\"need custom software built\"',\n  '\"looking for development agency\" software',\n  '\"custom software development\" \"request for quote\"'\n];\nreturn queries.map(q => ({json: {query: q}}));"
+        },
+        "id": "wf11-queries",
+        "name": "Build Alert Queries",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "https://serpapi.com/search",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "={{ $json.query }}"
+              },
+              {
+                "name": "api_key",
+                "value": "={{ $env.SERPAPI_KEY }}"
+              },
+              {
+                "name": "engine",
+                "value": "google"
+              },
+              {
+                "name": "num",
+                "value": "10"
+              },
+              {
+                "name": "tbs",
+                "value": "qdr:d"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "wf11-serp",
+        "name": "SerpAPI Google Search",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "amount": 6,
+          "unit": "seconds"
+        },
+        "id": "wf11-wait",
+        "name": "Rate Limit",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1,
+        "position": [
+          740,
+          500
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\nconst seen = new Set();\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const organicResults = data.organic_results || [];\n    for (const r of organicResults) {\n      if (!r.link || seen.has(r.link)) continue;\n      seen.add(r.link);\n      results.push({\n        json: {\n          title: r.title || '',\n          description: r.snippet || '',\n          source: 'google_alerts',\n          source_url: r.link || '',\n          source_id: r.link || '',\n          posted_at: r.date ? new Date(r.date).toISOString() : new Date().toISOString(),\n          company_name: null,\n          contact_email: null,\n          estimated_budget: null,\n          deadline: null,\n          location: null,\n          tags: ['google_alerts', 'rfp'],\n          raw_data: r\n        }\n      });\n    }\n  } catch(e) {}\n}\nreturn results.length > 0 ? results : [{json: {empty: true}}];"
+        },
+        "id": "wf11-normalize",
+        "name": "Normalize Search Results",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'google_alerts', false);",
+          "options": {}
+        },
+        "id": "wf11-stage",
+        "name": "Insert to Staging",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 2 Hours": {
+        "main": [
+          [
+            {
+              "node": "Build Alert Queries",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Alert Queries": {
+        "main": [
+          [
+            {
+              "node": "SerpAPI Google Search",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SerpAPI Google Search": {
+        "main": [
+          [
+            {
+              "node": "Normalize Search Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Search Results": {
+        "main": [
+          [
+            {
+              "node": "Insert to Staging",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-11"
+  },
+  {
+    "name": "DealHunter - 12 AI Processing Pipeline (CORE)",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 5
+              }
+            ]
+          }
+        },
+        "id": "wf12-trigger",
+        "name": "Every 5 Minutes",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id, raw_opportunity, source FROM staging_raw WHERE is_processed = false ORDER BY created_at ASC LIMIT 50;",
+          "options": {}
+        },
+        "id": "wf12-fetch",
+        "name": "Fetch Unprocessed Items",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          490,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const HIGH_PRIORITY = [\n  'artificial intelligence', 'machine learning', 'computer vision',\n  'deep learning', 'neural network', 'nlp', 'automation platform',\n  'ai system', 'custom software', 'enterprise application',\n  'data pipeline', 'workflow automation'\n];\nconst MEDIUM_PRIORITY = [\n  'web application', 'mobile app', 'saas', 'analytics dashboard',\n  'api development', 'cloud migration', 'full stack', 'mvp'\n];\nconst SKIP = [\n  'wordpress theme', 'shopify theme', 'logo design', 'seo services',\n  'social media management', 'content writing', 'virtual assistant', 'data entry'\n];\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const row = item.json;\n    const opp = typeof row.raw_opportunity === 'string' ? JSON.parse(row.raw_opportunity) : row.raw_opportunity;\n    const text = ((opp.title || '') + ' ' + (opp.description || '')).toLowerCase();\n    \n    const shouldSkip = SKIP.some(kw => text.includes(kw));\n    if (shouldSkip) continue;\n    \n    const isHigh = HIGH_PRIORITY.some(kw => text.includes(kw));\n    const isMedium = MEDIUM_PRIORITY.some(kw => text.includes(kw));\n    \n    if (!isHigh && !isMedium) continue;\n    \n    results.push({\n      json: {\n        staging_id: row.id,\n        priority: isHigh ? 'high' : 'medium',\n        opp: opp\n      }\n    });\n  } catch(e) {}\n}\n\nreturn results.length > 0 ? results : [{json: {filtered_out: true}}];"
+        },
+        "id": "wf12-prefilter",
+        "name": "Keyword Pre-Filter",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c-pf",
+                "leftValue": "={{ $json.filtered_out }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "notEquals"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "wf12-checkfilter",
+        "name": "Has Candidates",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.anthropic.com/v1/messages",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "x-api-key",
+                "value": "={{ $env.ANTHROPIC_API_KEY }}"
+              },
+              {
+                "name": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "json",
+          "jsonBody": "={{ JSON.stringify({model: 'claude-sonnet-4-6', max_tokens: 1024, messages: [{role: 'user', content: 'Score this opportunity for ScaleBuild AI (custom AI/ML software dev company). Return ONLY valid JSON with these exact fields:\\n- relevance_score (0-1): Match to ScaleBuild services (AI/ML, computer vision, enterprise automation, full-stack, SaaS)\\n- budget_score (0-1): 1.0=$100K+, 0.8=$50-100K, 0.6=$25-50K, 0.4=$10-25K, 0.2=<$10K, 0.5=unknown but substantial\\n- urgency_score (0-1): 1.0=<1week, 0.7=1month, 0.4=3months, 0.2=no deadline\\n- win_probability (0-1): Likelihood ScaleBuild could win this\\n- summary: 2-3 sentence summary\\n- industry: industry vertical\\n- tags: array of keyword tags\\n- reasoning: brief explanation\\n\\nOpportunity:\\nTitle: ' + ($json.opp.title || '') + '\\nDescription: ' + ($json.opp.description || '').substring(0, 2000) + '\\nSource: ' + ($json.opp.source || '') + '\\nBudget hint: ' + ($json.opp.estimated_budget || 'unknown')}]}) }}",
+          "options": {}
+        },
+        "id": "wf12-sonnet",
+        "name": "Claude Sonnet Scoring",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const content = data.content && data.content[0] ? data.content[0].text : '';\n    \n    let scores = {};\n    try {\n      const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) scores = JSON.parse(jsonMatch[0]);\n    } catch(e) {\n      scores = {relevance_score: 0.3, budget_score: 0.3, urgency_score: 0.3, win_probability: 0.3, summary: 'Parse error', industry: 'Unknown', tags: [], reasoning: 'Could not parse AI response'};\n    }\n    \n    const overall = (\n      (scores.relevance_score || 0) * 0.35 +\n      (scores.budget_score || 0) * 0.25 +\n      (scores.urgency_score || 0) * 0.15 +\n      (scores.win_probability || 0) * 0.25\n    );\n    \n    // Pass along the original opp data\n    const prevJson = $('Has Candidates').first().json;\n    \n    results.push({\n      json: {\n        staging_id: item.json._staging_id || prevJson.staging_id,\n        opp: item.json._opp || prevJson.opp,\n        relevance_score: scores.relevance_score || 0,\n        budget_score: scores.budget_score || 0,\n        urgency_score: scores.urgency_score || 0,\n        win_probability: scores.win_probability || 0,\n        overall_score: Math.round(overall * 1000) / 1000,\n        ai_summary: scores.summary || '',\n        industry: scores.industry || '',\n        ai_tags: scores.tags || [],\n        ai_reasoning: scores.reasoning || ''\n      }\n    });\n  } catch(e) {\n    results.push({json: {score_error: true, error: e.message}});\n  }\n}\nreturn results;"
+        },
+        "id": "wf12-parsescore",
+        "name": "Parse & Calculate Score",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c-score",
+                "leftValue": "={{ $json.overall_score }}",
+                "rightValue": 0.3,
+                "operator": {
+                  "type": "number",
+                  "operation": "gte"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "wf12-checkthresh",
+        "name": "Score >= 0.3",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.anthropic.com/v1/messages",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "x-api-key",
+                "value": "={{ $env.ANTHROPIC_API_KEY }}"
+              },
+              {
+                "name": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "json",
+          "jsonBody": "={{ JSON.stringify({model: 'claude-haiku-4-5-20251001', max_tokens: 512, messages: [{role: 'user', content: 'Extract structured data from this opportunity. Return ONLY valid JSON with these fields (use null for unknown):\\n- company_name: string or null\\n- contact_name: string or null\\n- contact_email: string or null\\n- contact_phone: string or null\\n- estimated_budget_low: number in USD or null\\n- estimated_budget_high: number in USD or null\\n- deadline: ISO date string or null\\n- location: string or null\\n- tech_stack_mentioned: array of strings\\n- project_duration: string or null\\n- team_size_needed: string or null\\n\\nOpportunity:\\nTitle: ' + ($json.opp.title || '') + '\\nDescription: ' + ($json.opp.description || '').substring(0, 1500)}]}) }}",
+          "options": {}
+        },
+        "id": "wf12-haiku",
+        "name": "Claude Haiku Extraction",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const content = data.content && data.content[0] ? data.content[0].text : '{}';\n    \n    let extracted = {};\n    try {\n      const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) extracted = JSON.parse(jsonMatch[0]);\n    } catch(e) {\n      extracted = {};\n    }\n    \n    // Merge with score data from previous step\n    const scoreData = $('Score >= 0.3').first().json;\n    \n    results.push({\n      json: {\n        ...scoreData,\n        company_name: extracted.company_name || scoreData.opp.company_name || null,\n        contact_name: extracted.contact_name || null,\n        contact_email: extracted.contact_email || scoreData.opp.contact_email || null,\n        contact_phone: extracted.contact_phone || null,\n        estimated_budget_low: extracted.estimated_budget_low || scoreData.opp.estimated_budget || null,\n        estimated_budget_high: extracted.estimated_budget_high || null,\n        deadline: extracted.deadline || scoreData.opp.deadline || null,\n        location: extracted.location || scoreData.opp.location || null,\n        tech_stack: extracted.tech_stack_mentioned || [],\n        project_duration: extracted.project_duration || null,\n        team_size_needed: extracted.team_size_needed || null\n      }\n    });\n  } catch(e) {\n    results.push({json: {extract_error: true}});\n  }\n}\nreturn results;"
+        },
+        "id": "wf12-parseextract",
+        "name": "Parse Extracted Entities",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id FROM opportunities WHERE (source = '{{ $json.opp.source }}' AND source_id = '{{ $json.opp.source_id }}') OR (similarity(title, '{{ $json.opp.title.replace(/'/g, \"''\") }}') > 0.85) LIMIT 1;",
+          "options": {}
+        },
+        "id": "wf12-dedup",
+        "name": "Deduplication Check",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          2490,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c-dup",
+                "leftValue": "={{ $json.id }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "isEmpty"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "wf12-checkdup",
+        "name": "Not Duplicate",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          2740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO opportunities (\n  title, description, source, source_url, source_id,\n  company_name, contact_name, contact_email, contact_phone,\n  estimated_budget_low, estimated_budget_high, deadline,\n  location, industry,\n  relevance_score, budget_score, urgency_score, win_probability, overall_score,\n  ai_summary, ai_tags, ai_reasoning,\n  posted_at, raw_data, status\n) VALUES (\n  '{{ ($json.opp.title || \"\").replace(/\\'/g, \"''\") }}',\n  '{{ ($json.opp.description || \"\").substring(0,5000).replace(/\\'/g, \"''\") }}',\n  '{{ $json.opp.source || \"\" }}',\n  '{{ $json.opp.source_url || \"\" }}',\n  '{{ $json.opp.source_id || \"\" }}',\n  '{{ ($json.company_name || \"\").replace(/\\'/g, \"''\") }}',\n  '{{ ($json.contact_name || \"\").replace(/\\'/g, \"''\") }}',\n  '{{ $json.contact_email || \"\" }}',\n  '{{ $json.contact_phone || \"\" }}',\n  {{ $json.estimated_budget_low || 'NULL' }},\n  {{ $json.estimated_budget_high || 'NULL' }},\n  {{ $json.deadline ? \"'\" + $json.deadline + \"'\" : 'NULL' }},\n  '{{ ($json.location || \"\").replace(/\\'/g, \"''\") }}',\n  '{{ ($json.industry || \"\").replace(/\\'/g, \"''\") }}',\n  {{ $json.relevance_score || 0 }},\n  {{ $json.budget_score || 0 }},\n  {{ $json.urgency_score || 0 }},\n  {{ $json.win_probability || 0 }},\n  {{ $json.overall_score || 0 }},\n  '{{ ($json.ai_summary || \"\").replace(/\\'/g, \"''\") }}',\n  '{{ JSON.stringify($json.ai_tags || []) }}'::jsonb,\n  '{{ ($json.ai_reasoning || \"\").replace(/\\'/g, \"''\") }}',\n  {{ $json.opp.posted_at ? \"'\" + $json.opp.posted_at + \"'\" : 'NOW()' }},\n  '{{ JSON.stringify($json.opp.raw_data || {}) }}'::jsonb,\n  'new'\n) RETURNING id, overall_score, title;",
+          "options": {}
+        },
+        "id": "wf12-insert",
+        "name": "Store Opportunity",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          2990,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE staging_raw SET is_processed = true WHERE id = {{ $('Keyword Pre-Filter').first().json.staging_id }};",
+          "options": {}
+        },
+        "id": "wf12-markdone",
+        "name": "Mark Staging Processed",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          3240,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "wf12-noop1",
+        "name": "Discard Low Score",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          1740,
+          500
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "wf12-noop2",
+        "name": "Skip Duplicate",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          2740,
+          500
+        ]
+      }
+    ],
+    "connections": {
+      "Every 5 Minutes": {
+        "main": [
+          [
+            {
+              "node": "Fetch Unprocessed Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Unprocessed Items": {
+        "main": [
+          [
+            {
+              "node": "Keyword Pre-Filter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Keyword Pre-Filter": {
+        "main": [
+          [
+            {
+              "node": "Has Candidates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Candidates": {
+        "main": [
+          [
+            {
+              "node": "Claude Sonnet Scoring",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Discard Low Score",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Claude Sonnet Scoring": {
+        "main": [
+          [
+            {
+              "node": "Parse & Calculate Score",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse & Calculate Score": {
+        "main": [
+          [
+            {
+              "node": "Score >= 0.3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Score >= 0.3": {
+        "main": [
+          [
+            {
+              "node": "Claude Haiku Extraction",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Discard Low Score",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Claude Haiku Extraction": {
+        "main": [
+          [
+            {
+              "node": "Parse Extracted Entities",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Extracted Entities": {
+        "main": [
+          [
+            {
+              "node": "Deduplication Check",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Deduplication Check": {
+        "main": [
+          [
+            {
+              "node": "Not Duplicate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Not Duplicate": {
+        "main": [
+          [
+            {
+              "node": "Store Opportunity",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Skip Duplicate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Store Opportunity": {
+        "main": [
+          [
+            {
+              "node": "Mark Staging Processed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-12"
+  },
+  {
+    "name": "DealHunter - 13 Notification Router",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 5
+              }
+            ]
+          }
+        },
+        "id": "wf13-trigger",
+        "name": "Every 5 Minutes",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id, title, overall_score, relevance_score, budget_score, urgency_score, win_probability, source, source_url, ai_summary, estimated_budget_low, estimated_budget_high, deadline, company_name, industry, ai_tags FROM opportunities WHERE is_notified = false AND overall_score >= 0.70 ORDER BY overall_score DESC LIMIT 20;",
+          "options": {}
+        },
+        "id": "wf13-fetch",
+        "name": "Fetch Unnotified High Score",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          490,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c-85",
+                "leftValue": "={{ $json.overall_score }}",
+                "rightValue": 0.85,
+                "operator": {
+                  "type": "number",
+                  "operation": "gte"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "wf13-check85",
+        "name": "Score >= 0.85",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "select": "channel",
+          "channelId": {
+            "__rl": true,
+            "value": "dealhunter-alerts",
+            "mode": "name"
+          },
+          "text": "=:dart: DealHunter Alert\n*Score: {{ ($json.overall_score * 100).toFixed(0) }}%* | {{ $json.source }}\n*{{ $json.title }}*\n{{ $json.ai_summary }}\nBudget: {{ $json.estimated_budget_low ? '$' + $json.estimated_budget_low.toLocaleString() : 'Unknown' }}{{ $json.estimated_budget_high ? ' - $' + $json.estimated_budget_high.toLocaleString() : '' }} | Deadline: {{ $json.deadline || 'Not specified' }}\n<{{ $json.source_url }}|View Listing>",
+          "otherOptions": {}
+        },
+        "id": "wf13-slack",
+        "name": "Slack Alert",
+        "type": "n8n-nodes-base.slack",
+        "typeVersion": 2,
+        "position": [
+          990,
+          200
+        ],
+        "credentials": {
+          "slack": {
+            "id": "cred-slack",
+            "name": "DealHunter Slack"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "fromEmail": "dealhunter@scalebuild.ai",
+          "toEmail": "={{ $env.NOTIFICATION_EMAIL || 'ujjwal@scalebuild.ai' }}",
+          "subject": "=:dart: DealHunter Alert - Score {{ ($json.overall_score * 100).toFixed(0) }}% - {{ $json.title }}",
+          "emailType": "html",
+          "html": "=<html><body style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n<h2 style=\"color: #2563eb;\">DealHunter Alert</h2>\n<div style=\"background: #f0f9ff; border-left: 4px solid #2563eb; padding: 16px; margin: 16px 0;\">\n  <h3 style=\"margin: 0 0 8px;\">{{ $json.title }}</h3>\n  <p style=\"margin: 0; color: #64748b;\">{{ $json.source }} | {{ $json.industry }}</p>\n</div>\n<table style=\"width: 100%; border-collapse: collapse; margin: 16px 0;\">\n  <tr style=\"background: #f8fafc;\">\n    <td style=\"padding: 8px; border: 1px solid #e2e8f0;\">Overall Score</td>\n    <td style=\"padding: 8px; border: 1px solid #e2e8f0; font-weight: bold; color: #16a34a;\">{{ ($json.overall_score * 100).toFixed(1) }}%</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 8px; border: 1px solid #e2e8f0;\">Relevance</td>\n    <td style=\"padding: 8px; border: 1px solid #e2e8f0;\">{{ ($json.relevance_score * 100).toFixed(1) }}%</td>\n  </tr>\n  <tr style=\"background: #f8fafc;\">\n    <td style=\"padding: 8px; border: 1px solid #e2e8f0;\">Budget Score</td>\n    <td style=\"padding: 8px; border: 1px solid #e2e8f0;\">{{ ($json.budget_score * 100).toFixed(1) }}%</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 8px; border: 1px solid #e2e8f0;\">Urgency</td>\n    <td style=\"padding: 8px; border: 1px solid #e2e8f0;\">{{ ($json.urgency_score * 100).toFixed(1) }}%</td>\n  </tr>\n  <tr style=\"background: #f8fafc;\">\n    <td style=\"padding: 8px; border: 1px solid #e2e8f0;\">Win Probability</td>\n    <td style=\"padding: 8px; border: 1px solid #e2e8f0;\">{{ ($json.win_probability * 100).toFixed(1) }}%</td>\n  </tr>\n</table>\n<h4>AI Summary</h4>\n<p>{{ $json.ai_summary }}</p>\n<h4>Details</h4>\n<p><strong>Budget:</strong> {{ $json.estimated_budget_low ? '$' + $json.estimated_budget_low.toLocaleString() : 'Unknown' }}{{ $json.estimated_budget_high ? ' - $' + $json.estimated_budget_high.toLocaleString() : '' }}</p>\n<p><strong>Deadline:</strong> {{ $json.deadline || 'Not specified' }}</p>\n<p><strong>Company:</strong> {{ $json.company_name || 'Unknown' }}</p>\n<p><a href=\"{{ $json.source_url }}\" style=\"background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;\">View Listing</a></p>\n</body></html>",
+          "options": {}
+        },
+        "id": "wf13-email",
+        "name": "Send Alert Email",
+        "type": "n8n-nodes-base.sendGrid",
+        "typeVersion": 1,
+        "position": [
+          990,
+          400
+        ],
+        "credentials": {
+          "sendGrid": {
+            "id": "cred-sg",
+            "name": "DealHunter SendGrid"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c-95",
+                "leftValue": "={{ $json.overall_score }}",
+                "rightValue": 0.95,
+                "operator": {
+                  "type": "number",
+                  "operation": "gte"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "wf13-check95",
+        "name": "Score >= 0.95",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "send",
+          "from": "={{ $env.TWILIO_FROM_NUMBER }}",
+          "to": "={{ $env.NOTIFICATION_PHONE }}",
+          "message": "=DealHunter: [{{ ($json.overall_score * 100).toFixed(0) }}%] {{ $json.title.substring(0, 80) }} - {{ $json.source }}. Check dashboard."
+        },
+        "id": "wf13-sms",
+        "name": "Send SMS Alert",
+        "type": "n8n-nodes-base.twilio",
+        "typeVersion": 1,
+        "position": [
+          1490,
+          200
+        ],
+        "credentials": {
+          "twilio": {
+            "id": "cred-twilio",
+            "name": "DealHunter Twilio"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE opportunities SET is_notified = true WHERE id = '{{ $json.id }}';",
+          "options": {}
+        },
+        "id": "wf13-marknotified",
+        "name": "Mark Notified",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          1740,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE opportunities SET is_notified = true WHERE id = '{{ $json.id }}';",
+          "options": {}
+        },
+        "id": "wf13-markdigest",
+        "name": "Mark Digest Queued",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          990,
+          600
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Every 5 Minutes": {
+        "main": [
+          [
+            {
+              "node": "Fetch Unnotified High Score",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Unnotified High Score": {
+        "main": [
+          [
+            {
+              "node": "Score >= 0.85",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Score >= 0.85": {
+        "main": [
+          [
+            {
+              "node": "Slack Alert",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Mark Digest Queued",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Slack Alert": {
+        "main": [
+          [
+            {
+              "node": "Send Alert Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Alert Email": {
+        "main": [
+          [
+            {
+              "node": "Score >= 0.95",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Score >= 0.95": {
+        "main": [
+          [
+            {
+              "node": "Send SMS Alert",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Mark Notified",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send SMS Alert": {
+        "main": [
+          [
+            {
+              "node": "Mark Notified",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-13"
+  },
+  {
+    "name": "DealHunter - 14 Daily Digest",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 13 * * *"
+              }
+            ]
+          }
+        },
+        "id": "wf14-trigger",
+        "name": "Daily at 8 AM ET",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id, title, overall_score, relevance_score, budget_score, source, source_url, ai_summary, estimated_budget_low, estimated_budget_high, deadline, company_name, industry, ai_tags, discovered_at FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '24 hours' AND overall_score >= 0.70 ORDER BY overall_score DESC LIMIT 10;",
+          "options": {}
+        },
+        "id": "wf14-opps",
+        "name": "Fetch Top Opportunities",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          490,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT COUNT(*) as total_found, COUNT(*) FILTER (WHERE overall_score >= 0.85) as high_score_count, COUNT(*) FILTER (WHERE overall_score >= 0.70 AND overall_score < 0.85) as medium_score_count, source, COUNT(*) as source_count FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '24 hours' GROUP BY source ORDER BY source_count DESC;",
+          "options": {}
+        },
+        "id": "wf14-stats",
+        "name": "Fetch 24h Stats",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          490,
+          500
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "mode": "combine",
+          "combinationMode": "mergeByIndex",
+          "options": {
+            "includeUnpaired": true
+          }
+        },
+        "id": "wf14-merge",
+        "name": "Merge Data",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst opportunities = items.filter(i => i.json.title).map(i => i.json);\nconst stats = items.filter(i => i.json.total_found);\n\nconst totalFound = stats.length > 0 ? (stats[0].json.total_found || 0) : opportunities.length;\nconst highScore = stats.length > 0 ? (stats[0].json.high_score_count || 0) : opportunities.filter(o => o.overall_score >= 0.85).length;\n\nconst sourceBreakdown = {};\nfor (const item of stats) {\n  if (item.json.source) {\n    sourceBreakdown[item.json.source] = item.json.source_count;\n  }\n}\n\nconst oppRows = opportunities.map(o => `\n  <tr>\n    <td style=\"padding: 12px; border-bottom: 1px solid #e2e8f0; max-width: 200px;\">\n      <a href=\"${o.source_url || '#'}\" style=\"color: #2563eb; text-decoration: none; font-weight: bold;\">${(o.title || '').substring(0, 60)}${(o.title || '').length > 60 ? '...' : ''}</a>\n      <br><small style=\"color: #64748b;\">${o.company_name || 'Unknown'} | ${o.source || ''}</small>\n    </td>\n    <td style=\"padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: center;\">\n      <span style=\"background: ${o.overall_score >= 0.85 ? '#16a34a' : '#2563eb'}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 13px;\">${(o.overall_score * 100).toFixed(0)}%</span>\n    </td>\n    <td style=\"padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px;\">${(o.ai_summary || '').substring(0, 120)}...</td>\n    <td style=\"padding: 12px; border-bottom: 1px solid #e2e8f0; white-space: nowrap;\">${o.estimated_budget_low ? '$' + Number(o.estimated_budget_low).toLocaleString() : 'TBD'}</td>\n    <td style=\"padding: 12px; border-bottom: 1px solid #e2e8f0; white-space: nowrap;\">${o.industry || ''}</td>\n  </tr>`).join('');\n\nconst sourceRows = Object.entries(sourceBreakdown).map(([src, cnt]) => `<li>${src}: <strong>${cnt}</strong></li>`).join('');\n\nconst html = `<html><body style=\"font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;\">\n<h1 style=\"color: #1e293b; border-bottom: 3px solid #2563eb; padding-bottom: 12px;\">DealHunter Daily Digest</h1>\n<p style=\"color: #64748b;\">${new Date().toLocaleDateString('en-US', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}</p>\n\n<div style=\"display: flex; gap: 20px; margin: 20px 0;\">\n  <div style=\"background: #f0f9ff; border-radius: 8px; padding: 16px; flex: 1; text-align: center;\">\n    <div style=\"font-size: 32px; font-weight: bold; color: #2563eb;\">${totalFound}</div>\n    <div style=\"color: #64748b;\">Total Found (24h)</div>\n  </div>\n  <div style=\"background: #f0fdf4; border-radius: 8px; padding: 16px; flex: 1; text-align: center;\">\n    <div style=\"font-size: 32px; font-weight: bold; color: #16a34a;\">${highScore}</div>\n    <div style=\"color: #64748b;\">High Score (85%+)</div>\n  </div>\n  <div style=\"background: #fff7ed; border-radius: 8px; padding: 16px; flex: 1; text-align: center;\">\n    <div style=\"font-size: 32px; font-weight: bold; color: #ea580c;\">${opportunities.length}</div>\n    <div style=\"color: #64748b;\">In Digest (70%+)</div>\n  </div>\n</div>\n\n<h2>By Source</h2>\n<ul>${sourceRows || '<li>No data</li>'}</ul>\n\n<h2>Top Opportunities</h2>\n<table style=\"width: 100%; border-collapse: collapse; font-size: 14px;\">\n  <thead>\n    <tr style=\"background: #1e293b; color: white;\">\n      <th style=\"padding: 12px; text-align: left;\">Opportunity</th>\n      <th style=\"padding: 12px; text-align: center;\">Score</th>\n      <th style=\"padding: 12px; text-align: left;\">Summary</th>\n      <th style=\"padding: 12px; text-align: left;\">Budget</th>\n      <th style=\"padding: 12px; text-align: left;\">Industry</th>\n    </tr>\n  </thead>\n  <tbody>\n    ${oppRows || '<tr><td colspan=\"5\" style=\"padding: 20px; text-align: center; color: #64748b;\">No opportunities above 70% score in the last 24 hours.</td></tr>'}\n  </tbody>\n</table>\n\n<p style=\"margin-top: 30px; color: #94a3b8; font-size: 12px;\">Generated by DealHunter AI Lead Generation System</p>\n</body></html>`;\n\nreturn [{json: {html, subject: `DealHunter Daily Digest - ${opportunities.length} leads (${new Date().toLocaleDateString()})`, opportunities_count: opportunities.length}}];"
+        },
+        "id": "wf14-buildhtml",
+        "name": "Build HTML Digest",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "fromEmail": "dealhunter@scalebuild.ai",
+          "toEmail": "={{ $env.NOTIFICATION_EMAIL || 'ujjwal@scalebuild.ai' }}",
+          "subject": "={{ $json.subject }}",
+          "emailType": "html",
+          "html": "={{ $json.html }}",
+          "options": {}
+        },
+        "id": "wf14-send",
+        "name": "Send Digest Email",
+        "type": "n8n-nodes-base.sendGrid",
+        "typeVersion": 1,
+        "position": [
+          1240,
+          300
+        ],
+        "credentials": {
+          "sendGrid": {
+            "id": "cred-sg",
+            "name": "DealHunter SendGrid"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Daily at 8 AM ET": {
+        "main": [
+          [
+            {
+              "node": "Fetch Top Opportunities",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch 24h Stats",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Top Opportunities": {
+        "main": [
+          [
+            {
+              "node": "Merge Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch 24h Stats": {
+        "main": [
+          [
+            {
+              "node": "Merge Data",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge Data": {
+        "main": [
+          [
+            {
+              "node": "Build HTML Digest",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build HTML Digest": {
+        "main": [
+          [
+            {
+              "node": "Send Digest Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-14"
+  },
+  {
+    "name": "DealHunter - 15 Weekly Report",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 14 * * 1"
+              }
+            ]
+          }
+        },
+        "id": "wf15-trigger",
+        "name": "Monday 9 AM ET",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT\n  COUNT(*) as total_leads,\n  COUNT(*) FILTER (WHERE overall_score >= 0.85) as hot_leads,\n  COUNT(*) FILTER (WHERE overall_score >= 0.70 AND overall_score < 0.85) as warm_leads,\n  COUNT(*) FILTER (WHERE overall_score >= 0.30 AND overall_score < 0.70) as cold_leads,\n  COALESCE(SUM(estimated_budget_high), SUM(estimated_budget_low), 0) as total_pipeline_value,\n  AVG(overall_score) as avg_score\nFROM opportunities\nWHERE discovered_at >= NOW() - INTERVAL '7 days';",
+          "options": {}
+        },
+        "id": "wf15-summary",
+        "name": "Fetch Weekly Summary",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          490,
+          200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT source, COUNT(*) as count, AVG(overall_score) as avg_score FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '7 days' GROUP BY source ORDER BY count DESC;",
+          "options": {}
+        },
+        "id": "wf15-bysource",
+        "name": "Leads by Source",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          490,
+          350
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT industry, COUNT(*) as count, AVG(overall_score) as avg_score FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '7 days' AND industry IS NOT NULL AND industry != '' GROUP BY industry ORDER BY count DESC LIMIT 10;",
+          "options": {}
+        },
+        "id": "wf15-byindustry",
+        "name": "Leads by Industry",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          490,
+          500
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT COUNT(*) as prev_total, AVG(overall_score) as prev_avg_score FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '14 days' AND discovered_at < NOW() - INTERVAL '7 days';",
+          "options": {}
+        },
+        "id": "wf15-prev",
+        "name": "Previous Week Stats",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          490,
+          650
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT title, overall_score, source, source_url, company_name, industry, estimated_budget_low, estimated_budget_high, ai_summary FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '7 days' AND overall_score >= 0.70 ORDER BY overall_score DESC LIMIT 5;",
+          "options": {}
+        },
+        "id": "wf15-top",
+        "name": "Top 5 Opportunities",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          490,
+          800
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Collect all data - items come in from multiple sources\nlet summary = {total_leads: 0, hot_leads: 0, warm_leads: 0, cold_leads: 0, total_pipeline_value: 0, avg_score: 0};\nlet sources = [];\nlet industries = [];\nlet prevStats = {prev_total: 0, prev_avg_score: 0};\nlet topOpps = [];\n\nfor (const item of items) {\n  const d = item.json;\n  if (d.total_leads !== undefined) summary = d;\n  else if (d.prev_total !== undefined) prevStats = d;\n  else if (d.source !== undefined && d.count !== undefined) sources.push(d);\n  else if (d.industry !== undefined && d.count !== undefined) industries.push(d);\n  else if (d.title !== undefined && d.overall_score !== undefined) topOpps.push(d);\n}\n\nconst weekChange = summary.total_leads - prevStats.prev_total;\nconst weekChangeStr = weekChange >= 0 ? `+${weekChange}` : `${weekChange}`;\nconst weekChangePct = prevStats.prev_total > 0 ? ((weekChange / prevStats.prev_total) * 100).toFixed(0) : 'N/A';\n\nconst sourceRows = sources.map(s => `<tr><td style=\"padding:8px;border:1px solid #e2e8f0\">${s.source}</td><td style=\"padding:8px;border:1px solid #e2e8f0;text-align:center\">${s.count}</td><td style=\"padding:8px;border:1px solid #e2e8f0;text-align:center\">${(s.avg_score * 100).toFixed(0)}%</td></tr>`).join('');\nconst industryRows = industries.map(i => `<tr><td style=\"padding:8px;border:1px solid #e2e8f0\">${i.industry}</td><td style=\"padding:8px;border:1px solid #e2e8f0;text-align:center\">${i.count}</td><td style=\"padding:8px;border:1px solid #e2e8f0;text-align:center\">${(i.avg_score * 100).toFixed(0)}%</td></tr>`).join('');\nconst oppRows = topOpps.map(o => `<tr><td style=\"padding:8px;border:1px solid #e2e8f0\"><a href=\"${o.source_url || '#'}\" style=\"color:#2563eb\">${(o.title || '').substring(0,60)}</a></td><td style=\"padding:8px;border:1px solid #e2e8f0;text-align:center\"><span style=\"background:#16a34a;color:white;padding:2px 8px;border-radius:12px\">${(o.overall_score * 100).toFixed(0)}%</span></td><td style=\"padding:8px;border:1px solid #e2e8f0\">${o.company_name || 'Unknown'}</td><td style=\"padding:8px;border:1px solid #e2e8f0\">${o.industry || ''}</td><td style=\"padding:8px;border:1px solid #e2e8f0\">${o.estimated_budget_low ? '$' + Number(o.estimated_budget_low).toLocaleString() : 'TBD'}</td></tr>`).join('');\n\nconst weekStart = new Date(Date.now() - 7*24*60*60*1000).toLocaleDateString('en-US', {month: 'short', day: 'numeric'});\nconst weekEnd = new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});\n\nconst html = `<html><body style=\"font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px\">\n<h1 style=\"color:#1e293b;border-bottom:3px solid #2563eb;padding-bottom:12px\">DealHunter Weekly Report</h1>\n<p style=\"color:#64748b\">${weekStart} - ${weekEnd}</p>\n\n<h2>Pipeline Overview</h2>\n<div style=\"display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0\">\n  <div style=\"background:#f0f9ff;border-radius:8px;padding:16px;text-align:center\">\n    <div style=\"font-size:28px;font-weight:bold;color:#2563eb\">${summary.total_leads}</div>\n    <div style=\"color:#64748b\">Total Leads</div>\n    <div style=\"color:${weekChange >= 0 ? '#16a34a' : '#dc2626'};font-size:13px\">${weekChangeStr} vs last week (${weekChangePct}%)</div>\n  </div>\n  <div style=\"background:#f0fdf4;border-radius:8px;padding:16px;text-align:center\">\n    <div style=\"font-size:28px;font-weight:bold;color:#16a34a\">${summary.hot_leads}</div>\n    <div style=\"color:#64748b\">Hot Leads (85%+)</div>\n  </div>\n  <div style=\"background:#fff7ed;border-radius:8px;padding:16px;text-align:center\">\n    <div style=\"font-size:28px;font-weight:bold;color:#ea580c\">$${summary.total_pipeline_value ? (summary.total_pipeline_value/1000).toFixed(0) + 'K' : '0'}</div>\n    <div style=\"color:#64748b\">Pipeline Value</div>\n  </div>\n</div>\n\n<h2>Leads by Source</h2>\n<table style=\"width:100%;border-collapse:collapse;font-size:14px\">\n  <thead><tr style=\"background:#1e293b;color:white\"><th style=\"padding:10px;text-align:left\">Source</th><th style=\"padding:10px;text-align:center\">Count</th><th style=\"padding:10px;text-align:center\">Avg Score</th></tr></thead>\n  <tbody>${sourceRows || '<tr><td colspan=\"3\" style=\"padding:20px;text-align:center;color:#94a3b8\">No data</td></tr>'}</tbody>\n</table>\n\n<h2>Leads by Industry</h2>\n<table style=\"width:100%;border-collapse:collapse;font-size:14px;margin-top:10px\">\n  <thead><tr style=\"background:#1e293b;color:white\"><th style=\"padding:10px;text-align:left\">Industry</th><th style=\"padding:10px;text-align:center\">Count</th><th style=\"padding:10px;text-align:center\">Avg Score</th></tr></thead>\n  <tbody>${industryRows || '<tr><td colspan=\"3\" style=\"padding:20px;text-align:center;color:#94a3b8\">No data</td></tr>'}</tbody>\n</table>\n\n<h2>Top 5 Opportunities This Week</h2>\n<table style=\"width:100%;border-collapse:collapse;font-size:14px;margin-top:10px\">\n  <thead><tr style=\"background:#1e293b;color:white\"><th style=\"padding:10px;text-align:left\">Title</th><th style=\"padding:10px;text-align:center\">Score</th><th style=\"padding:10px;text-align:left\">Company</th><th style=\"padding:10px;text-align:left\">Industry</th><th style=\"padding:10px;text-align:left\">Budget</th></tr></thead>\n  <tbody>${oppRows || '<tr><td colspan=\"5\" style=\"padding:20px;text-align:center;color:#94a3b8\">No high-score opportunities this week</td></tr>'}</tbody>\n</table>\n\n<p style=\"margin-top:30px;color:#94a3b8;font-size:12px\">Generated by DealHunter AI Lead Generation System</p>\n</body></html>`;\n\nreturn [{json: {html, subject: `DealHunter Weekly Report - ${weekStart} to ${weekEnd} (${summary.total_leads} leads)`}}];"
+        },
+        "id": "wf15-buildhtml",
+        "name": "Build Weekly Report HTML",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          500
+        ]
+      },
+      {
+        "parameters": {
+          "fromEmail": "dealhunter@scalebuild.ai",
+          "toEmail": "={{ $env.NOTIFICATION_EMAIL || 'ujjwal@scalebuild.ai' }}",
+          "subject": "={{ $json.subject }}",
+          "emailType": "html",
+          "html": "={{ $json.html }}",
+          "options": {}
+        },
+        "id": "wf15-send",
+        "name": "Send Weekly Report",
+        "type": "n8n-nodes-base.sendGrid",
+        "typeVersion": 1,
+        "position": [
+          990,
+          500
+        ],
+        "credentials": {
+          "sendGrid": {
+            "id": "cred-sg",
+            "name": "DealHunter SendGrid"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Monday 9 AM ET": {
+        "main": [
+          [
+            {
+              "node": "Fetch Weekly Summary",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leads by Source",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leads by Industry",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Previous Week Stats",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Top 5 Opportunities",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Weekly Summary": {
+        "main": [
+          [
+            {
+              "node": "Build Weekly Report HTML",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leads by Source": {
+        "main": [
+          [
+            {
+              "node": "Build Weekly Report HTML",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leads by Industry": {
+        "main": [
+          [
+            {
+              "node": "Build Weekly Report HTML",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Previous Week Stats": {
+        "main": [
+          [
+            {
+              "node": "Build Weekly Report HTML",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Top 5 Opportunities": {
+        "main": [
+          [
+            {
+              "node": "Build Weekly Report HTML",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Weekly Report HTML": {
+        "main": [
+          [
+            {
+              "node": "Send Weekly Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-15"
+  },
+  {
+    "name": "DealHunter - 16 Outreach Generator",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "outreach-generator",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "wf16-webhook",
+        "name": "Outreach Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst opportunityId = body.opportunity_id;\nif (!opportunityId) {\n  throw new Error('opportunity_id is required in request body');\n}\nreturn [{json: {opportunity_id: opportunityId}}];"
+        },
+        "id": "wf16-validate",
+        "name": "Validate Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id, title, description, source, source_url, company_name, contact_name, contact_email, industry, ai_summary, ai_tags, ai_reasoning, overall_score, relevance_score, budget_score, estimated_budget_low, estimated_budget_high, deadline, location, raw_data FROM opportunities WHERE id = '{{ $json.opportunity_id }}' LIMIT 1;",
+          "options": {}
+        },
+        "id": "wf16-load",
+        "name": "Load Opportunity",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "cred-pg",
+            "name": "DealHunter PostgreSQL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c-found",
+                "leftValue": "={{ $json.id }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "isNotEmpty"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "wf16-checkfound",
+        "name": "Opportunity Found",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const opp = $input.first().json;\nlet techStack = '';\ntry {\n  const raw = typeof opp.raw_data === 'string' ? JSON.parse(opp.raw_data) : opp.raw_data;\n  techStack = (raw && raw.tech_stack) ? raw.tech_stack.join(', ') : '';\n} catch(e) {}\n\nconst tags = opp.ai_tags ? (Array.isArray(opp.ai_tags) ? opp.ai_tags.join(', ') : JSON.stringify(opp.ai_tags)) : '';\n\nconst prompt = `Write a cold outreach email as Ujjwal Roy, CEO of ScaleBuild AI. Tone: direct, confident, no fluff, human-sounding, NO em dashes. 150-200 words max.\n\nStructure:\n1) Hook referencing their specific need\n2) Credentials (Intel/IBM/Micron engineering leadership + specific AI/CV capabilities)\n3) Soft CTA\n\nCompany: ${opp.company_name || 'the company'}\nIndustry: ${opp.industry || 'technology'}\nNeed: ${opp.ai_summary || opp.description?.substring(0, 300) || opp.title}\nTech: ${techStack || tags}\nBudget Range: ${opp.estimated_budget_low ? '$' + opp.estimated_budget_low.toLocaleString() : 'not specified'}${opp.estimated_budget_high ? ' - $' + opp.estimated_budget_high.toLocaleString() : ''}\n\nScaleBuild capabilities: custom AI/ML, computer vision for manufacturing/security, enterprise workflow automation, full-stack SaaS development\n\nSign off: Ujjwal Roy\\nCEO, ScaleBuild AI`;\n\nreturn [{json: {opp, prompt}}];"
+        },
+        "id": "wf16-buildprompt",
+        "name": "Build Outreach Prompt",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.anthropic.com/v1/messages",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "x-api-key",
+                "value": "={{ $env.ANTHROPIC_API_KEY }}"
+              },
+              {
+                "name": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "json",
+          "jsonBody": "={{ JSON.stringify({model: 'claude-sonnet-4-6', max_tokens: 600, messages: [{role: 'user', content: $json.prompt}]}) }}",
+          "options": {}
+        },
+        "id": "wf16-claude",
+        "name": "Generate Outreach Email",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1490,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst claudeResponse = items[0].json;\nconst emailText = claudeResponse.content && claudeResponse.content[0] ? claudeResponse.content[0].text : '';\n\nconst oppData = $('Build Outreach Prompt').first().json.opp;\n\nreturn [{\n  json: {\n    success: true,\n    opportunity_id: oppData.id,\n    opportunity_title: oppData.title,\n    company_name: oppData.company_name,\n    outreach_email: emailText,\n    generated_at: new Date().toISOString(),\n    metadata: {\n      source: oppData.source,\n      overall_score: oppData.overall_score,\n      industry: oppData.industry\n    }\n  }\n}];"
+        },
+        "id": "wf16-format",
+        "name": "Format Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "id": "wf16-respond",
+        "name": "Return Email",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          1990,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "{\"success\": false, \"error\": \"Opportunity not found\"}",
+          "options": {
+            "responseCode": 404
+          }
+        },
+        "id": "wf16-notfound",
+        "name": "Return 404",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          1240,
+          500
+        ]
+      }
+    ],
+    "connections": {
+      "Outreach Webhook": {
+        "main": [
+          [
+            {
+              "node": "Validate Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Input": {
+        "main": [
+          [
+            {
+              "node": "Load Opportunity",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Opportunity": {
+        "main": [
+          [
+            {
+              "node": "Opportunity Found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Opportunity Found": {
+        "main": [
+          [
+            {
+              "node": "Build Outreach Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Return 404",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Outreach Prompt": {
+        "main": [
+          [
+            {
+              "node": "Generate Outreach Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Generate Outreach Email": {
+        "main": [
+          [
+            {
+              "node": "Format Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Response": {
+        "main": [
+          [
+            {
+              "node": "Return Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "id": "wf-16"
+  }
+]

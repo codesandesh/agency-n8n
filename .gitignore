@@ -1,5 +1,5 @@
 .env
-*.sh
 node_modules/
 *.log
 .DS_Store
+backup.json
