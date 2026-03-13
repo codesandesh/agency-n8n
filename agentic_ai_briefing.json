@@ -24,14 +24,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "url": "={{ `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${$env.GOOGLE_AI_API_KEY}` }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "x-goog-api-key",
-              "value": "={{ $env.GOOGLE_AI_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -182,14 +178,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "url": "={{ `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${$env.GOOGLE_AI_API_KEY}` }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "x-goog-api-key",
-              "value": "={{ $env.GOOGLE_AI_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -450,7 +442,7 @@
         "conditions": {
           "boolean": [
             {
-              "value1": "={{ $json.is_agentic_relevant }}",
+              "value1": "={{ !!.is_agentic_relevant }}",
               "value2": true
             }
           ]
@@ -791,123 +783,6 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.linkedin.com/v2/images?action=initializeUpload",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "linkedInOAuth2Api",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Restli-Protocol-Version",
-              "value": "2.0.0"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ initializeUploadRequest: { owner: $env.LINKEDIN_PERSON_URN } }) }}",
-        "options": {}
-      },
-      "id": "node-linkedin-register-upload",
-      "name": "LinkedIn Register Upload",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        4080,
-        -80
-      ],
-      "credentials": {
-        "linkedInOAuth2Api": {
-          "id": "zZyXFhaWEOwf0PAL",
-          "name": "LinkedIn account"
-        }
-      },
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "jsCode": "const reg = $input.item.json;\nconst postData = $('Prepare Post Data').item.json;\nconst assetUrn = reg?.value?.image;\nconst uploadUrl = reg?.value?.uploadUrl;\nif (!assetUrn || !uploadUrl) {\n  throw new Error('LinkedIn image init failed: ' + JSON.stringify(reg).slice(0, 500));\n}\nreturn [{\n  json: { ...postData, linkedin_asset_urn: assetUrn, linkedin_upload_url: uploadUrl },\n  binary: $('Prepare Post Data').item.binary\n}];"
-      },
-      "id": "node-linkedin-merge-data",
-      "name": "LinkedIn Merge Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        4280,
-        -80
-      ],
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "method": "PUT",
-        "url": "={{ $json.linkedin_upload_url }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "linkedInOAuth2Api",
-        "sendBody": true,
-        "contentType": "binaryData",
-        "inputDataFieldName": "final_card",
-        "options": {}
-      },
-      "id": "node-linkedin-upload-image",
-      "name": "LinkedIn Upload Image",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        4480,
-        -80
-      ],
-      "credentials": {
-        "linkedInOAuth2Api": {
-          "id": "zZyXFhaWEOwf0PAL",
-          "name": "LinkedIn account"
-        }
-      },
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.linkedin.com/v2/posts",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "linkedInOAuth2Api",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Restli-Protocol-Version",
-              "value": "2.0.0"
-            },
-            {
-              "name": "LinkedIn-Version",
-              "value": "202504"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ (() => {\n  const d = $('LinkedIn Merge Data').item.json;\n  const text = d.linkedin || d.summary || d.headline || '';\n  const assetUrn = d.linkedin_asset_urn || '';\n  const headline = d.headline || '';\n  return JSON.stringify({\n    \"author\": $env.LINKEDIN_PERSON_URN,\n    \"commentary\": text,\n    \"visibility\": \"PUBLIC\",\n    \"distribution\": {\n      \"feedDistribution\": \"MAIN_FEED\",\n      \"targetEntities\": [],\n      \"thirdPartyDistributionChannels\": []\n    },\n    \"content\": {\n      \"media\": { \"title\": headline, \"id\": assetUrn }\n    },\n    \"lifecycleState\": \"PUBLISHED\",\n    \"isReshareDisabledByAuthor\": false\n  });\n})() }}",
-        "options": {}
-      },
-      "id": "node-linkedin-create-post",
-      "name": "LinkedIn Create Post",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        4680,
-        -80
-      ],
-      "credentials": {
-        "linkedInOAuth2Api": {
-          "id": "zZyXFhaWEOwf0PAL",
-          "name": "LinkedIn account"
-        }
-      },
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "method": "POST",
         "url": "=https://graph.facebook.com/v20.0/{{ $env.HYPERSCALER_FB_PAGE_ID }}/photos?caption={{ encodeURIComponent($json.facebook) }}&access_token={{ $env.HYPERSCALER_FB_PAGE_ACCESS_TOKEN }}",
         "sendQuery": true,
         "queryParameters": {
@@ -1211,11 +1086,6 @@
       "main": [
         [
           {
-            "node": "LinkedIn Register Upload",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Post to Facebook",
             "type": "main",
             "index": 0
@@ -1235,50 +1105,6 @@
       ]
     },
     "Post to Facebook": {
-      "main": [
-        [
-          {
-            "node": "Final Summary",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LinkedIn Register Upload": {
-      "main": [
-        [
-          {
-            "node": "LinkedIn Merge Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LinkedIn Merge Data": {
-      "main": [
-        [
-          {
-            "node": "LinkedIn Upload Image",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LinkedIn Upload Image": {
-      "main": [
-        [
-          {
-            "node": "LinkedIn Create Post",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LinkedIn Create Post": {
       "main": [
         [
           {

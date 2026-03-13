@@ -1,180 +1,5 @@
 [
   {
-    "name": "DealHunter - 00 Database Setup",
-    "nodes": [
-      {
-        "parameters": {},
-        "id": "wf00-trigger",
-        "name": "Manual Trigger",
-        "type": "n8n-nodes-base.manualTrigger",
-        "typeVersion": 1,
-        "position": [
-          240,
-          300
-        ]
-      },
-      {
-        "parameters": {
-          "operation": "executeQuery",
-          "query": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"; CREATE EXTENSION IF NOT EXISTS pg_trgm;",
-          "options": {}
-        },
-        "id": "wf00-ext",
-        "name": "Create Extensions",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
-        "position": [
-          490,
-          300
-        ],
-        "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "operation": "executeQuery",
-          "query": "CREATE TABLE IF NOT EXISTS opportunities (\n  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),\n  title TEXT,\n  description TEXT,\n  source TEXT,\n  source_url TEXT,\n  source_id TEXT,\n  company_name TEXT,\n  contact_name TEXT,\n  contact_email TEXT,\n  contact_phone TEXT,\n  estimated_budget_low FLOAT,\n  estimated_budget_high FLOAT,\n  deadline DATE,\n  location TEXT,\n  industry TEXT,\n  relevance_score FLOAT,\n  budget_score FLOAT,\n  urgency_score FLOAT,\n  win_probability FLOAT,\n  overall_score FLOAT,\n  ai_summary TEXT,\n  ai_tags JSONB,\n  ai_reasoning TEXT,\n  status TEXT DEFAULT 'new' CHECK (status IN ('new','reviewed','contacted','qualified','disqualified','won','lost')),\n  is_notified BOOLEAN DEFAULT false,\n  discovered_at TIMESTAMPTZ DEFAULT NOW(),\n  posted_at TIMESTAMPTZ,\n  updated_at TIMESTAMPTZ DEFAULT NOW(),\n  raw_data JSONB\n);",
-          "options": {}
-        },
-        "id": "wf00-opp",
-        "name": "Create Opportunities Table",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
-        "position": [
-          740,
-          300
-        ],
-        "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "operation": "executeQuery",
-          "query": "CREATE TABLE IF NOT EXISTS sources (\n  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),\n  name TEXT,\n  type TEXT CHECK (type IN ('api','scrape','rss')),\n  url TEXT,\n  is_active BOOLEAN DEFAULT true,\n  last_scraped_at TIMESTAMPTZ,\n  scrape_frequency_minutes INT,\n  config JSONB,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\nCREATE TABLE IF NOT EXISTS scrape_logs (\n  id SERIAL PRIMARY KEY,\n  source_name TEXT,\n  started_at TIMESTAMPTZ,\n  finished_at TIMESTAMPTZ,\n  status TEXT CHECK (status IN ('success','failed','partial')),\n  items_found INT,\n  items_new INT,\n  items_scored INT,\n  error_message TEXT,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\nCREATE TABLE IF NOT EXISTS staging_raw (\n  id SERIAL PRIMARY KEY,\n  raw_opportunity JSONB,\n  source TEXT,\n  is_processed BOOLEAN DEFAULT false,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);",
-          "options": {}
-        },
-        "id": "wf00-other",
-        "name": "Create Other Tables",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
-        "position": [
-          990,
-          300
-        ],
-        "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "operation": "executeQuery",
-          "query": "CREATE INDEX IF NOT EXISTS idx_opp_score ON opportunities(overall_score DESC);\nCREATE INDEX IF NOT EXISTS idx_opp_status ON opportunities(status);\nCREATE INDEX IF NOT EXISTS idx_opp_discovered ON opportunities(discovered_at DESC);\nCREATE INDEX IF NOT EXISTS idx_opp_source ON opportunities(source, source_id);\nCREATE INDEX IF NOT EXISTS idx_opp_title_trgm ON opportunities USING gin(title gin_trgm_ops);\nCREATE INDEX IF NOT EXISTS idx_staging_processed ON staging_raw(is_processed) WHERE is_processed = false;",
-          "options": {}
-        },
-        "id": "wf00-idx",
-        "name": "Create Indexes",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
-        "position": [
-          1240,
-          300
-        ],
-        "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "jsCode": "return [{json: {message: 'Database setup complete. All tables and indexes created successfully.'}}];"
-        },
-        "id": "wf00-done",
-        "name": "Setup Complete",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          1490,
-          300
-        ]
-      }
-    ],
-    "connections": {
-      "Manual Trigger": {
-        "main": [
-          [
-            {
-              "node": "Create Extensions",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Create Extensions": {
-        "main": [
-          [
-            {
-              "node": "Create Opportunities Table",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Create Opportunities Table": {
-        "main": [
-          [
-            {
-              "node": "Create Other Tables",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Create Other Tables": {
-        "main": [
-          [
-            {
-              "node": "Create Indexes",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Create Indexes": {
-        "main": [
-          [
-            {
-              "node": "Setup Complete",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "active": false,
-    "settings": {
-      "executionOrder": "v1"
-    },
-    "id": "wf-00"
-  },
-  {
     "name": "DealHunter - 01 Upwork RSS Scraper",
     "nodes": [
       {
@@ -212,13 +37,20 @@
       },
       {
         "parameters": {
-          "url": "=https://www.upwork.com/ab/feed/jobs/rss?q={{ $json.encodedQuery }}&sort=recency",
-          "options": {}
+          "method": "GET",
+          "url": "=https://www.upwork.com/ab/feed/jobs/rss?q={{ $json.encodedQuery }}&sort=recency&paging=0%3B20",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "text"
+              }
+            }
+          }
         },
         "id": "wf01-rss",
-        "name": "Fetch RSS Feed",
-        "type": "n8n-nodes-base.rssFeedRead",
-        "typeVersion": 1,
+        "name": "Fetch Upwork Jobs",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
         "position": [
           740,
           300
@@ -240,10 +72,10 @@
       },
       {
         "parameters": {
-          "jsCode": "const items = $input.all();\nconst results = [];\nfor (const item of items) {\n  try {\n    const entry = item.json;\n    const budgetMatch = (entry.content || entry.description || '').match(/\\$([\\d,]+)/);\n    const budget = budgetMatch ? parseFloat(budgetMatch[1].replace(/,/g, '')) : null;\n    results.push({\n      json: {\n        title: entry.title || '',\n        description: entry.content || entry.contentSnippet || entry.description || '',\n        source: 'upwork',\n        source_url: entry.link || entry.url || '',\n        source_id: entry.guid || entry.id || entry.link || '',\n        posted_at: entry.pubDate || entry.isoDate || new Date().toISOString(),\n        company_name: null,\n        contact_email: null,\n        estimated_budget: budget,\n        deadline: null,\n        location: null,\n        tags: ['upwork', 'freelance'],\n        raw_data: entry\n      }\n    });\n  } catch(e) {\n    // skip malformed entries\n  }\n}\nreturn results;"
+          "jsCode": "const items = $input.all();\nconst results = [];\n\nfunction getCdata(xml, tag) {\n  const m = xml.match(new RegExp('<' + tag + '[^>]*>(?:<!\\\\[CDATA\\\\[)?([\\\\s\\\\S]*?)(?:\\\\]\\\\]>)?<\\/' + tag + '>', 'i'));\n  return m ? m[1].trim() : '';\n}\n\nfor (const item of items) {\n  try {\n    const xmlText = item.json.data || item.json.body || '';\n    if (!xmlText) continue;\n\n    const itemBlocks = xmlText.match(/<item>([\\s\\S]*?)<\\/item>/g) || [];\n    for (const block of itemBlocks) {\n      const title = getCdata(block, 'title');\n      const link = getCdata(block, 'link') || getCdata(block, 'guid');\n      const guid = getCdata(block, 'guid') || link;\n      const pubDate = getCdata(block, 'pubDate');\n      const description = getCdata(block, 'description').replace(/<[^>]+>/g, '').trim();\n\n      if (!title) continue;\n\n      const budgetMatch = description.match(/\\\\$([\\\\d,]+)/);\n      const budget = budgetMatch ? parseFloat(budgetMatch[1].replace(/,/g, '')) : null;\n\n      results.push({\n        json: {\n          title,\n          description,\n          source: 'upwork',\n          source_url: link,\n          source_id: guid,\n          posted_at: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),\n          company_name: null,\n          contact_email: null,\n          estimated_budget: budget,\n          deadline: null,\n          location: null,\n          tags: ['upwork', 'freelance'],\n          raw_data: { title, description, link, pubDate, guid }\n        }\n      });\n    }\n  } catch(e) {\n    // skip malformed entries\n  }\n}\nreturn results;"
         },
         "id": "wf01-normalize",
-        "name": "Normalize RSS Items",
+        "name": "Normalize Job Items",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
@@ -253,43 +85,81 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'upwork', false) ON CONFLICT DO NOTHING;",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "wf01-stage",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           1240,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "UPDATE sources SET last_scraped_at = NOW() WHERE name = 'upwork';",
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_SOURCES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "sources",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "name": "upwork",
+              "last_scraped_at": "={{ new Date().toISOString() }}"
+            },
+            "matchingColumns": [
+              "name"
+            ]
+          },
           "options": {}
         },
         "id": "wf01-log",
         "name": "Update Source Timestamp",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           1490,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -310,25 +180,36 @@
         "main": [
           [
             {
-              "node": "Fetch RSS Feed",
+              "node": "Rate Limit Wait",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Fetch RSS Feed": {
+      "Rate Limit Wait": {
         "main": [
           [
             {
-              "node": "Normalize RSS Items",
+              "node": "Fetch Upwork Jobs",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Normalize RSS Items": {
+      "Fetch Upwork Jobs": {
+        "main": [
+          [
+            {
+              "node": "Normalize Job Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Job Items": {
         "main": [
           [
             {
@@ -382,41 +263,12 @@
       },
       {
         "parameters": {
-          "method": "POST",
-          "url": "https://www.reddit.com/api/v1/access_token",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/x-www-form-urlencoded"
-              },
-              {
-                "name": "User-Agent",
-                "value": "DealHunter/1.0"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Basic {{ Buffer.from($env.REDDIT_CLIENT_ID + ':' + $env.REDDIT_CLIENT_SECRET).toString('base64') }}"
-              }
-            ]
-          },
-          "sendBody": true,
-          "contentType": "form-urlencoded",
-          "bodyParameters": {
-            "parameters": [
-              {
-                "name": "grant_type",
-                "value": "client_credentials"
-              }
-            ]
-          },
-          "options": {}
+          "jsCode": "return [{json: {ready: true}}];"
         },
         "id": "dh-reddit-02",
         "name": "Reddit OAuth Token",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4,
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
         "position": [
           490,
           300
@@ -546,22 +398,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed)\nVALUES ('{{ JSON.stringify($json) }}'::jsonb, '{{ $json.source }}', false)\nON CONFLICT DO NOTHING;",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "dh-reddit-09",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           2240,
           200
         ],
         "credentials": {
-          "postgres": {
-            "id": "pg-cred-1",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       },
@@ -578,22 +449,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "UPDATE sources SET last_scraped_at = NOW() WHERE name = 'reddit';",
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_SOURCES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "sources",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "name": "reddit",
+              "last_scraped_at": "={{ new Date().toISOString() }}"
+            },
+            "matchingColumns": [
+              "name"
+            ]
+          },
           "options": {}
         },
         "id": "dh-reddit-11",
         "name": "Update Source Timestamp",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           2490,
           200
         ],
         "credentials": {
-          "postgres": {
-            "id": "pg-cred-1",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -831,22 +721,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'hackernews', false);",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "wf03-stage",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           1240,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -1011,22 +920,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'clutch', false);",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "wf04-stage",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           1240,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -1169,22 +1097,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'freelancer', false);",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "wf05-stage",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           990,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -1317,22 +1264,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'twitter', false);",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "wf06-stage",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           990,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -1479,22 +1445,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'linkedin_proxy', false);",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "wf07-stage",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           1240,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -1620,22 +1605,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'crunchbase', false);",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "wf08-stage",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           990,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -1784,22 +1788,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'nocode_community', false);",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "wf09-stage",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           1240,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -1964,22 +1987,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'rfp_platform', false);",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "wf10-stage",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           1240,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -2141,22 +2183,41 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO staging_raw (raw_opportunity, source, is_processed) VALUES ('{{ JSON.stringify($json) }}'::jsonb, 'google_alerts', false);",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id || Math.random().toString(36).substr(2, 9) }}",
+              "source": "={{ $json.source }}",
+              "raw_opportunity": "={{ JSON.stringify($json) }}",
+              "is_processed": "false",
+              "created_at": "={{ new Date().toISOString() }}"
+            }
+          },
           "options": {}
         },
         "id": "wf11-stage",
         "name": "Insert to Staging",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           1240,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -2238,28 +2299,50 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT id, raw_opportunity, source FROM staging_raw WHERE is_processed = false ORDER BY created_at ASC LIMIT 50;",
+          "operation": "readAllRows",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
           "options": {}
         },
         "id": "wf12-fetch",
         "name": "Fetch Unprocessed Items",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           490,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       },
       {
         "parameters": {
-          "jsCode": "const HIGH_PRIORITY = [\n  'artificial intelligence', 'machine learning', 'computer vision',\n  'deep learning', 'neural network', 'nlp', 'automation platform',\n  'ai system', 'custom software', 'enterprise application',\n  'data pipeline', 'workflow automation'\n];\nconst MEDIUM_PRIORITY = [\n  'web application', 'mobile app', 'saas', 'analytics dashboard',\n  'api development', 'cloud migration', 'full stack', 'mvp'\n];\nconst SKIP = [\n  'wordpress theme', 'shopify theme', 'logo design', 'seo services',\n  'social media management', 'content writing', 'virtual assistant', 'data entry'\n];\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const row = item.json;\n    const opp = typeof row.raw_opportunity === 'string' ? JSON.parse(row.raw_opportunity) : row.raw_opportunity;\n    const text = ((opp.title || '') + ' ' + (opp.description || '')).toLowerCase();\n    \n    const shouldSkip = SKIP.some(kw => text.includes(kw));\n    if (shouldSkip) continue;\n    \n    const isHigh = HIGH_PRIORITY.some(kw => text.includes(kw));\n    const isMedium = MEDIUM_PRIORITY.some(kw => text.includes(kw));\n    \n    if (!isHigh && !isMedium) continue;\n    \n    results.push({\n      json: {\n        staging_id: row.id,\n        priority: isHigh ? 'high' : 'medium',\n        opp: opp\n      }\n    });\n  } catch(e) {}\n}\n\nreturn results.length > 0 ? results : [{json: {filtered_out: true}}];"
+          "jsCode": "return $input.all().filter(item => item.json.is_processed !== 'TRUE' && item.json.is_processed !== true).slice(0, 50).map(item => {\n  let opp = item.json.raw_opportunity;\n  if (typeof opp === 'string') {\n    if (opp.trim() === '') {\n      const rd = item.json.raw_data;\n      opp = (typeof rd === 'string' && rd.trim() !== '') ? JSON.parse(rd) : { title: item.json.title || '', description: item.json.description || '' };\n    } else {\n      opp = JSON.parse(opp);\n    }\n  }\n  return {\n    json: {\n      id: item.json.id,\n      raw_opportunity: opp,\n      source: item.json.source\n    }\n  };\n});"
+        },
+        "id": "wf12-filter-unprocessed",
+        "name": "Filter Unprocessed",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const HIGH_PRIORITY = [\n  'artificial intelligence', 'machine learning', 'computer vision',\n  'deep learning', 'neural network', 'nlp', 'automation platform',\n  'ai system', 'custom software', 'enterprise application',\n  'data pipeline', 'workflow automation', 'zoho', 'google ads',\n  'facebook ads', 'crm', 'erp', 'integration', 'api', 'scraping',\n  'bot', 'chatbot', 'automation', 'n8n', 'zapier', 'make.com'\n];\nconst MEDIUM_PRIORITY = [\n  'web application', 'mobile app', 'saas', 'analytics dashboard',\n  'api development', 'cloud migration', 'full stack', 'mvp',\n  'shopify', 'woocommerce', 'wordpress plugin', 'react', 'node',\n  'python', 'developer', 'engineer', 'software', 'database', 'design'\n];\nconst SKIP = [\n  'logo design', 'seo services', 'content writing', 'data entry',\n  'translation', 'transcription', 'proofreading', 'ghostwriting'\n];\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const row = item.json;\n    const opp = typeof row.raw_opportunity === 'string' ? JSON.parse(row.raw_opportunity) : row.raw_opportunity;\n    const text = ((opp.title || '') + ' ' + (opp.description || '')).toLowerCase();\n    \n    const shouldSkip = SKIP.some(kw => text.includes(kw));\n    if (shouldSkip) continue;\n    \n    const isHigh = HIGH_PRIORITY.some(kw => text.includes(kw));\n    const isMedium = MEDIUM_PRIORITY.some(kw => text.includes(kw));\n    \n    const budgetHint = opp.budget ? String(opp.budget.minimum || 'unknown') : String(opp.estimated_budget || 'unknown');\n    results.push({\n      json: {\n        staging_id: row.id,\n        priority: isHigh ? 'high' : isMedium ? 'medium' : 'low',\n        opp: opp,\n        opp_title: opp.title || '',\n        opp_description: (opp.description || '').substring(0, 2000),\n        opp_source: item.json.source || '',\n        opp_budget: budgetHint\n      }\n    });\n  } catch(e) {}\n}\n\nreturn results.length > 0 ? results : [{json: {filtered_out: true}}];"
         },
         "id": "wf12-prefilter",
         "name": "Keyword Pre-Filter",
@@ -2303,32 +2386,36 @@
       },
       {
         "parameters": {
+          "jsCode": "const item = $input.first().json;\nconst title = item.opp_title || '';\nconst description = item.opp_description || '';\nconst source = item.opp_source || '';\nconst budget = item.opp_budget || 'unknown';\nconst prompt = 'Score this opportunity for ScaleBuild AI (custom AI/ML software dev company). Return ONLY valid JSON with these exact fields:\\n- relevance_score (0-1): Match to ScaleBuild services (AI/ML, computer vision, enterprise automation, full-stack, SaaS)\\n- budget_score (0-1): 1.0=$100K+, 0.8=$50-100K, 0.6=$25-50K, 0.4=$10-25K, 0.2=<$10K, 0.5=unknown but substantial\\n- urgency_score (0-1): 1.0=<1week, 0.7=1month, 0.4=3months, 0.2=no deadline\\n- win_probability (0-1): Likelihood ScaleBuild could win this\\n- summary: 2-3 sentence summary\\n- industry: industry vertical\\n- tags: array of keyword tags\\n- reasoning: brief explanation\\n\\nOpportunity:\\nTitle: ' + title + '\\nDescription: ' + description + '\\nSource: ' + source + '\\nBudget hint: ' + budget;\nconst body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 1024, temperature: 0.7 } };\nreturn [{ json: { ...item, gemini_body: JSON.stringify(body) } }];"
+        },
+        "id": "wf12-prep-scoring",
+        "name": "Prepare Scoring Body",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1115,
+          300
+        ]
+      },
+      {
+        "parameters": {
           "method": "POST",
-          "url": "https://api.anthropic.com/v1/messages",
+          "url": "={{ `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${$env.GOOGLE_AI_API_KEY}` }}",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
               {
-                "name": "x-api-key",
-                "value": "={{ $env.ANTHROPIC_API_KEY }}"
-              },
-              {
-                "name": "anthropic-version",
-                "value": "2023-06-01"
-              },
-              {
-                "name": "content-type",
+                "name": "Content-Type",
                 "value": "application/json"
               }
             ]
           },
-          "sendBody": true,
-          "contentType": "json",
-          "jsonBody": "={{ JSON.stringify({model: 'claude-sonnet-4-6', max_tokens: 1024, messages: [{role: 'user', content: 'Score this opportunity for ScaleBuild AI (custom AI/ML software dev company). Return ONLY valid JSON with these exact fields:\\n- relevance_score (0-1): Match to ScaleBuild services (AI/ML, computer vision, enterprise automation, full-stack, SaaS)\\n- budget_score (0-1): 1.0=$100K+, 0.8=$50-100K, 0.6=$25-50K, 0.4=$10-25K, 0.2=<$10K, 0.5=unknown but substantial\\n- urgency_score (0-1): 1.0=<1week, 0.7=1month, 0.4=3months, 0.2=no deadline\\n- win_probability (0-1): Likelihood ScaleBuild could win this\\n- summary: 2-3 sentence summary\\n- industry: industry vertical\\n- tags: array of keyword tags\\n- reasoning: brief explanation\\n\\nOpportunity:\\nTitle: ' + ($json.opp.title || '') + '\\nDescription: ' + ($json.opp.description || '').substring(0, 2000) + '\\nSource: ' + ($json.opp.source || '') + '\\nBudget hint: ' + ($json.opp.estimated_budget || 'unknown')}]}) }}",
+          "specifyBody": "string",
+          "body": "={{ $json.gemini_body }}",
           "options": {}
         },
         "id": "wf12-sonnet",
-        "name": "Claude Sonnet Scoring",
+        "name": "Gemini Scoring",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
         "position": [
@@ -2338,7 +2425,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const content = data.content && data.content[0] ? data.content[0].text : '';\n    \n    let scores = {};\n    try {\n      const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) scores = JSON.parse(jsonMatch[0]);\n    } catch(e) {\n      scores = {relevance_score: 0.3, budget_score: 0.3, urgency_score: 0.3, win_probability: 0.3, summary: 'Parse error', industry: 'Unknown', tags: [], reasoning: 'Could not parse AI response'};\n    }\n    \n    const overall = (\n      (scores.relevance_score || 0) * 0.35 +\n      (scores.budget_score || 0) * 0.25 +\n      (scores.urgency_score || 0) * 0.15 +\n      (scores.win_probability || 0) * 0.25\n    );\n    \n    // Pass along the original opp data\n    const prevJson = $('Has Candidates').first().json;\n    \n    results.push({\n      json: {\n        staging_id: item.json._staging_id || prevJson.staging_id,\n        opp: item.json._opp || prevJson.opp,\n        relevance_score: scores.relevance_score || 0,\n        budget_score: scores.budget_score || 0,\n        urgency_score: scores.urgency_score || 0,\n        win_probability: scores.win_probability || 0,\n        overall_score: Math.round(overall * 1000) / 1000,\n        ai_summary: scores.summary || '',\n        industry: scores.industry || '',\n        ai_tags: scores.tags || [],\n        ai_reasoning: scores.reasoning || ''\n      }\n    });\n  } catch(e) {\n    results.push({json: {score_error: true, error: e.message}});\n  }\n}\nreturn results;"
+          "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const content = data.candidates && data.candidates[0] ? data.candidates[0].content.parts[0].text : '';\n    \n    let scores = {};\n    try {\n      const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) scores = JSON.parse(jsonMatch[0]);\n    } catch(e) {\n      scores = {relevance_score: 0.3, budget_score: 0.3, urgency_score: 0.3, win_probability: 0.3, summary: 'Parse error', industry: 'Unknown', tags: [], reasoning: 'Could not parse AI response'};\n    }\n    \n    const overall = (\n      (scores.relevance_score || 0) * 0.35 +\n      (scores.budget_score || 0) * 0.25 +\n      (scores.urgency_score || 0) * 0.15 +\n      (scores.win_probability || 0) * 0.25\n    );\n    \n    // Pass along the original opp data\n    const prevJson = $('Has Candidates').first().json;\n    \n    results.push({\n      json: {\n        staging_id: item.json._staging_id || prevJson.staging_id,\n        opp: item.json._opp || prevJson.opp,\n        relevance_score: scores.relevance_score || 0,\n        budget_score: scores.budget_score || 0,\n        urgency_score: scores.urgency_score || 0,\n        win_probability: scores.win_probability || 0,\n        overall_score: Math.round(overall * 1000) / 1000,\n        ai_summary: scores.summary || '',\n        industry: scores.industry || '',\n        ai_tags: scores.tags || [],\n        ai_reasoning: scores.reasoning || ''\n      }\n    });\n  } catch(e) {\n    results.push({json: {score_error: true, error: e.message}});\n  }\n}\nreturn results;"
         },
         "id": "wf12-parsescore",
         "name": "Parse & Calculate Score",
@@ -2382,32 +2469,36 @@
       },
       {
         "parameters": {
+          "jsCode": "const item = $input.first().json;\nconst title = item.opp_title || '';\nconst description = item.opp_description || '';\nconst prompt = 'Extract structured data from this opportunity. Return ONLY valid JSON with these fields (use null for unknown):\\n- company_name: string or null\\n- contact_name: string or null\\n- contact_email: string or null\\n- contact_phone: string or null\\n- estimated_budget_low: number in USD or null\\n- estimated_budget_high: number in USD or null\\n- deadline: ISO date string or null\\n- location: string or null\\n- tech_stack_mentioned: array of strings\\n- project_duration: string or null\\n- team_size_needed: string or null\\n\\nOpportunity:\\nTitle: ' + title + '\\nDescription: ' + description;\nconst body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 512, temperature: 0.7 } };\nreturn [{ json: { ...item, gemini_body: JSON.stringify(body) } }];"
+        },
+        "id": "wf12-prep-extraction",
+        "name": "Prepare Extraction Body",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1865,
+          300
+        ]
+      },
+      {
+        "parameters": {
           "method": "POST",
-          "url": "https://api.anthropic.com/v1/messages",
+          "url": "={{ `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${$env.GOOGLE_AI_API_KEY}` }}",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
               {
-                "name": "x-api-key",
-                "value": "={{ $env.ANTHROPIC_API_KEY }}"
-              },
-              {
-                "name": "anthropic-version",
-                "value": "2023-06-01"
-              },
-              {
-                "name": "content-type",
+                "name": "Content-Type",
                 "value": "application/json"
               }
             ]
           },
-          "sendBody": true,
-          "contentType": "json",
-          "jsonBody": "={{ JSON.stringify({model: 'claude-haiku-4-5-20251001', max_tokens: 512, messages: [{role: 'user', content: 'Extract structured data from this opportunity. Return ONLY valid JSON with these fields (use null for unknown):\\n- company_name: string or null\\n- contact_name: string or null\\n- contact_email: string or null\\n- contact_phone: string or null\\n- estimated_budget_low: number in USD or null\\n- estimated_budget_high: number in USD or null\\n- deadline: ISO date string or null\\n- location: string or null\\n- tech_stack_mentioned: array of strings\\n- project_duration: string or null\\n- team_size_needed: string or null\\n\\nOpportunity:\\nTitle: ' + ($json.opp.title || '') + '\\nDescription: ' + ($json.opp.description || '').substring(0, 1500)}]}) }}",
+          "specifyBody": "string",
+          "body": "={{ $json.gemini_body }}",
           "options": {}
         },
         "id": "wf12-haiku",
-        "name": "Claude Haiku Extraction",
+        "name": "Gemini Extraction",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
         "position": [
@@ -2417,7 +2508,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const content = data.content && data.content[0] ? data.content[0].text : '{}';\n    \n    let extracted = {};\n    try {\n      const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) extracted = JSON.parse(jsonMatch[0]);\n    } catch(e) {\n      extracted = {};\n    }\n    \n    // Merge with score data from previous step\n    const scoreData = $('Score >= 0.3').first().json;\n    \n    results.push({\n      json: {\n        ...scoreData,\n        company_name: extracted.company_name || scoreData.opp.company_name || null,\n        contact_name: extracted.contact_name || null,\n        contact_email: extracted.contact_email || scoreData.opp.contact_email || null,\n        contact_phone: extracted.contact_phone || null,\n        estimated_budget_low: extracted.estimated_budget_low || scoreData.opp.estimated_budget || null,\n        estimated_budget_high: extracted.estimated_budget_high || null,\n        deadline: extracted.deadline || scoreData.opp.deadline || null,\n        location: extracted.location || scoreData.opp.location || null,\n        tech_stack: extracted.tech_stack_mentioned || [],\n        project_duration: extracted.project_duration || null,\n        team_size_needed: extracted.team_size_needed || null\n      }\n    });\n  } catch(e) {\n    results.push({json: {extract_error: true}});\n  }\n}\nreturn results;"
+          "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    const data = item.json;\n    const content = data.candidates && data.candidates[0] ? data.candidates[0].content.parts[0].text : '{}';\n    \n    let extracted = {};\n    try {\n      const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) extracted = JSON.parse(jsonMatch[0]);\n    } catch(e) {\n      extracted = {};\n    }\n    \n    // Merge with score data from previous step\n    const scoreData = $('Score >= 0.3').first().json;\n    \n    results.push({\n      json: {\n        ...scoreData,\n        company_name: extracted.company_name || scoreData.opp.company_name || null,\n        contact_name: extracted.contact_name || null,\n        contact_email: extracted.contact_email || scoreData.opp.contact_email || null,\n        contact_phone: extracted.contact_phone || null,\n        estimated_budget_low: extracted.estimated_budget_low || scoreData.opp.estimated_budget || null,\n        estimated_budget_high: extracted.estimated_budget_high || null,\n        deadline: extracted.deadline || scoreData.opp.deadline || null,\n        location: extracted.location || scoreData.opp.location || null,\n        tech_stack: extracted.tech_stack_mentioned || [],\n        project_duration: extracted.project_duration || null,\n        team_size_needed: extracted.team_size_needed || null\n      }\n    });\n  } catch(e) {\n    results.push({json: {extract_error: true}});\n  }\n}\nreturn results;"
         },
         "id": "wf12-parseextract",
         "name": "Parse Extracted Entities",
@@ -2430,24 +2521,46 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT id FROM opportunities WHERE (source = '{{ $json.opp.source }}' AND source_id = '{{ $json.opp.source_id }}') OR (similarity(title, '{{ $json.opp.title.replace(/'/g, \"''\") }}') > 0.85) LIMIT 1;",
+          "operation": "readAllRows",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_OPPORTUNITIES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "opportunities",
+            "mode": "name"
+          },
           "options": {}
         },
         "id": "wf12-dedup",
         "name": "Deduplication Check",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           2490,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
+      },
+      {
+        "parameters": {
+          "jsCode": "const title = $('Parse Extracted Entities').item.json.opp ? ($('Parse Extracted Entities').item.json.opp.title || '') : ($('Parse Extracted Entities').item.json.title || '');\nconst sourceId = $('Parse Extracted Entities').item.json.opp ? ($('Parse Extracted Entities').item.json.opp.source_id || '') : ($('Parse Extracted Entities').item.json.source_id || '');\nconst source = $('Parse Extracted Entities').item.json.opp ? ($('Parse Extracted Entities').item.json.opp.source || '') : ($('Parse Extracted Entities').item.json.source || '');\n\nconst existing = $input.all();\nconst isDuplicate = existing.some(item => {\n  if (item.json.source === source && item.json.source_id === sourceId && sourceId !== '') return true;\n  const existingTitle = item.json.title || '';\n  const similarity = calculateSimilarity(title.toLowerCase(), existingTitle.toLowerCase());\n  return similarity > 0.85;\n});\n\nfunction calculateSimilarity(a, b) {\n  if (a === b) return 1;\n  if (a.length === 0 || b.length === 0) return 0;\n  const longer = a.length > b.length ? a : b;\n  const shorter = a.length > b.length ? b : a;\n  const editDistance = getEditDistance(longer, shorter);\n  return (longer.length - editDistance) / longer.length;\n}\n\nfunction getEditDistance(a, b) {\n  const matrix = Array.from({length: b.length + 1}, (_, i) => [i]);\n  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;\n  for (let i = 1; i <= b.length; i++) {\n    for (let j = 1; j <= a.length; j++) {\n      matrix[i][j] = b[i-1] === a[j-1] ? matrix[i-1][j-1] : 1 + Math.min(matrix[i-1][j], matrix[i][j-1], matrix[i-1][j-1]);\n    }\n  }\n  return matrix[b.length][a.length];\n}\n\nreturn [{ json: { isDuplicate, id: isDuplicate ? 'DUPLICATE' : '' } }];"
+        },
+        "id": "wf12-checkdup-code",
+        "name": "Check Duplicate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2740,
+          300
+        ]
       },
       {
         "parameters": {
@@ -2460,11 +2573,11 @@
             "conditions": [
               {
                 "id": "c-dup",
-                "leftValue": "={{ $json.id }}",
-                "rightValue": "",
+                "leftValue": "={{ $json.isDuplicate }}",
+                "rightValue": true,
                 "operator": {
-                  "type": "string",
-                  "operation": "isEmpty"
+                  "type": "boolean",
+                  "operation": "notEquals"
                 }
               }
             ],
@@ -2482,43 +2595,105 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "INSERT INTO opportunities (\n  title, description, source, source_url, source_id,\n  company_name, contact_name, contact_email, contact_phone,\n  estimated_budget_low, estimated_budget_high, deadline,\n  location, industry,\n  relevance_score, budget_score, urgency_score, win_probability, overall_score,\n  ai_summary, ai_tags, ai_reasoning,\n  posted_at, raw_data, status\n) VALUES (\n  '{{ ($json.opp.title || \"\").replace(/\\'/g, \"''\") }}',\n  '{{ ($json.opp.description || \"\").substring(0,5000).replace(/\\'/g, \"''\") }}',\n  '{{ $json.opp.source || \"\" }}',\n  '{{ $json.opp.source_url || \"\" }}',\n  '{{ $json.opp.source_id || \"\" }}',\n  '{{ ($json.company_name || \"\").replace(/\\'/g, \"''\") }}',\n  '{{ ($json.contact_name || \"\").replace(/\\'/g, \"''\") }}',\n  '{{ $json.contact_email || \"\" }}',\n  '{{ $json.contact_phone || \"\" }}',\n  {{ $json.estimated_budget_low || 'NULL' }},\n  {{ $json.estimated_budget_high || 'NULL' }},\n  {{ $json.deadline ? \"'\" + $json.deadline + \"'\" : 'NULL' }},\n  '{{ ($json.location || \"\").replace(/\\'/g, \"''\") }}',\n  '{{ ($json.industry || \"\").replace(/\\'/g, \"''\") }}',\n  {{ $json.relevance_score || 0 }},\n  {{ $json.budget_score || 0 }},\n  {{ $json.urgency_score || 0 }},\n  {{ $json.win_probability || 0 }},\n  {{ $json.overall_score || 0 }},\n  '{{ ($json.ai_summary || \"\").replace(/\\'/g, \"''\") }}',\n  '{{ JSON.stringify($json.ai_tags || []) }}'::jsonb,\n  '{{ ($json.ai_reasoning || \"\").replace(/\\'/g, \"''\") }}',\n  {{ $json.opp.posted_at ? \"'\" + $json.opp.posted_at + \"'\" : 'NOW()' }},\n  '{{ JSON.stringify($json.opp.raw_data || {}) }}'::jsonb,\n  'new'\n) RETURNING id, overall_score, title;",
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_OPPORTUNITIES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "opportunities",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.opp && $json.opp.source_id ? $json.opp.source + '_' + $json.opp.source_id : Math.random().toString(36).substr(2, 9) }}",
+              "title": "={{ $json.opp ? $json.opp.title : '' }}",
+              "description": "={{ $json.opp ? ($json.opp.description || '').substring(0, 5000) : '' }}",
+              "source": "={{ $json.opp ? $json.opp.source : '' }}",
+              "source_url": "={{ $json.opp ? $json.opp.source_url : '' }}",
+              "source_id": "={{ $json.opp ? $json.opp.source_id : '' }}",
+              "company_name": "={{ $json.company_name || ($json.opp ? $json.opp.company_name : '') || '' }}",
+              "contact_name": "={{ $json.contact_name || '' }}",
+              "contact_email": "={{ $json.contact_email || ($json.opp ? $json.opp.contact_email : '') || '' }}",
+              "contact_phone": "={{ $json.contact_phone || '' }}",
+              "estimated_budget_low": "={{ $json.estimated_budget_low || ($json.opp ? $json.opp.estimated_budget : null) || '' }}",
+              "estimated_budget_high": "={{ $json.estimated_budget_high || '' }}",
+              "deadline": "={{ $json.deadline || ($json.opp ? $json.opp.deadline : null) || '' }}",
+              "location": "={{ $json.location || ($json.opp ? $json.opp.location : '') || '' }}",
+              "industry": "={{ $json.industry || '' }}",
+              "relevance_score": "={{ $json.relevance_score || 0 }}",
+              "budget_score": "={{ $json.budget_score || 0 }}",
+              "urgency_score": "={{ $json.urgency_score || 0 }}",
+              "win_probability": "={{ $json.win_probability || 0 }}",
+              "overall_score": "={{ $json.overall_score || 0 }}",
+              "ai_summary": "={{ $json.ai_summary || '' }}",
+              "ai_reasoning": "={{ $json.ai_reasoning || '' }}",
+              "ai_tags": "={{ JSON.stringify($json.ai_tags || []) }}",
+              "status": "new",
+              "is_notified": "false",
+              "discovered_at": "={{ new Date().toISOString() }}",
+              "posted_at": "={{ $json.opp && $json.opp.posted_at ? $json.opp.posted_at : new Date().toISOString() }}",
+              "updated_at": "={{ new Date().toISOString() }}",
+              "raw_data": "={{ JSON.stringify($json.opp && $json.opp.raw_data ? $json.opp.raw_data : {}) }}"
+            }
+          },
           "options": {}
         },
         "id": "wf12-insert",
         "name": "Store Opportunity",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           2990,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "UPDATE staging_raw SET is_processed = true WHERE id = {{ $('Keyword Pre-Filter').first().json.staging_id }};",
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_STAGING }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "staging_raw",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $('Keyword Pre-Filter').first().json.staging_id }}",
+              "is_processed": "true"
+            },
+            "matchingColumns": [
+              "id"
+            ]
+          },
           "options": {}
         },
         "id": "wf12-markdone",
         "name": "Mark Staging Processed",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           3240,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       },
@@ -2561,7 +2736,7 @@
         "main": [
           [
             {
-              "node": "Keyword Pre-Filter",
+              "node": "Filter Unprocessed",
               "type": "main",
               "index": 0
             }
@@ -2583,7 +2758,7 @@
         "main": [
           [
             {
-              "node": "Claude Sonnet Scoring",
+              "node": "Prepare Scoring Body",
               "type": "main",
               "index": 0
             }
@@ -2597,7 +2772,18 @@
           ]
         ]
       },
-      "Claude Sonnet Scoring": {
+      "Prepare Scoring Body": {
+        "main": [
+          [
+            {
+              "node": "Gemini Scoring",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Scoring": {
         "main": [
           [
             {
@@ -2623,7 +2809,7 @@
         "main": [
           [
             {
-              "node": "Claude Haiku Extraction",
+              "node": "Prepare Extraction Body",
               "type": "main",
               "index": 0
             }
@@ -2637,7 +2823,18 @@
           ]
         ]
       },
-      "Claude Haiku Extraction": {
+      "Prepare Extraction Body": {
+        "main": [
+          [
+            {
+              "node": "Gemini Extraction",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini Extraction": {
         "main": [
           [
             {
@@ -2663,7 +2860,7 @@
         "main": [
           [
             {
-              "node": "Not Duplicate",
+              "node": "Check Duplicate",
               "type": "main",
               "index": 0
             }
@@ -2693,6 +2890,28 @@
           [
             {
               "node": "Mark Staging Processed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filter Unprocessed": {
+        "main": [
+          [
+            {
+              "node": "Keyword Pre-Filter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Duplicate": {
+        "main": [
+          [
+            {
+              "node": "Not Duplicate",
               "type": "main",
               "index": 0
             }
@@ -2731,24 +2950,46 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT id, title, overall_score, relevance_score, budget_score, urgency_score, win_probability, source, source_url, ai_summary, estimated_budget_low, estimated_budget_high, deadline, company_name, industry, ai_tags FROM opportunities WHERE is_notified = false AND overall_score >= 0.70 ORDER BY overall_score DESC LIMIT 20;",
+          "operation": "readAllRows",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_OPPORTUNITIES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "opportunities",
+            "mode": "name"
+          },
           "options": {}
         },
         "id": "wf13-fetch",
         "name": "Fetch Unnotified High Score",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           490,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all()\n  .filter(item => item.json.is_notified !== 'TRUE' && item.json.is_notified !== true && parseFloat(item.json.overall_score || 0) >= 0.70)\n  .slice(0, 20)\n  .map(item => ({ json: item.json }));"
+        },
+        "id": "wf13-filter-unnotified",
+        "name": "Filter Unnotified",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ]
       },
       {
         "parameters": {
@@ -2886,43 +3127,81 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "UPDATE opportunities SET is_notified = true WHERE id = '{{ $json.id }}';",
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_OPPORTUNITIES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "opportunities",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id }}",
+              "is_notified": "true"
+            },
+            "matchingColumns": [
+              "id"
+            ]
+          },
           "options": {}
         },
         "id": "wf13-marknotified",
         "name": "Mark Notified",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           1740,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "UPDATE opportunities SET is_notified = true WHERE id = '{{ $json.id }}';",
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_OPPORTUNITIES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "opportunities",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.id }}",
+              "is_notified": "true"
+            },
+            "matchingColumns": [
+              "id"
+            ]
+          },
           "options": {}
         },
         "id": "wf13-markdigest",
         "name": "Mark Digest Queued",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           990,
           600
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       }
@@ -2943,7 +3222,7 @@
         "main": [
           [
             {
-              "node": "Score >= 0.85",
+              "node": "Filter Unnotified",
               "type": "main",
               "index": 0
             }
@@ -3018,6 +3297,17 @@
             }
           ]
         ]
+      },
+      "Filter Unnotified": {
+        "main": [
+          [
+            {
+              "node": "Score >= 0.85",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "active": false,
@@ -3051,45 +3341,89 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT id, title, overall_score, relevance_score, budget_score, source, source_url, ai_summary, estimated_budget_low, estimated_budget_high, deadline, company_name, industry, ai_tags, discovered_at FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '24 hours' AND overall_score >= 0.70 ORDER BY overall_score DESC LIMIT 10;",
+          "operation": "readAllRows",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_OPPORTUNITIES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "opportunities",
+            "mode": "name"
+          },
           "options": {}
         },
         "id": "wf14-opps",
         "name": "Fetch Top Opportunities",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           490,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT COUNT(*) as total_found, COUNT(*) FILTER (WHERE overall_score >= 0.85) as high_score_count, COUNT(*) FILTER (WHERE overall_score >= 0.70 AND overall_score < 0.85) as medium_score_count, source, COUNT(*) as source_count FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '24 hours' GROUP BY source ORDER BY source_count DESC;",
+          "jsCode": "const cutoff = new Date(Date.now() - 24*60*60*1000).toISOString();\nreturn $input.all()\n  .filter(item => item.json.discovered_at >= cutoff && parseFloat(item.json.overall_score || 0) >= 0.70)\n  .sort((a, b) => parseFloat(b.json.overall_score || 0) - parseFloat(a.json.overall_score || 0))\n  .slice(0, 10)\n  .map(item => ({ json: item.json }));"
+        },
+        "id": "wf14-filter-opps",
+        "name": "Filter Top Opportunities",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "readAllRows",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_OPPORTUNITIES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "opportunities",
+            "mode": "name"
+          },
           "options": {}
         },
         "id": "wf14-stats",
         "name": "Fetch 24h Stats",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           490,
           500
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
+      },
+      {
+        "parameters": {
+          "jsCode": "const cutoff = new Date(Date.now() - 24*60*60*1000).toISOString();\nconst recent = $input.all().filter(item => item.json.discovered_at >= cutoff);\n\nconst sourceMap = {};\nlet highScoreCount = 0;\nlet mediumScoreCount = 0;\n\nfor (const item of recent) {\n  const src = item.json.source || 'unknown';\n  const score = parseFloat(item.json.overall_score || 0);\n  if (!sourceMap[src]) sourceMap[src] = 0;\n  sourceMap[src]++;\n  if (score >= 0.85) highScoreCount++;\n  else if (score >= 0.70) mediumScoreCount++;\n}\n\nreturn Object.entries(sourceMap).map(([source, count]) => ({\n  json: {\n    total_found: recent.length,\n    high_score_count: highScoreCount,\n    medium_score_count: mediumScoreCount,\n    source,\n    source_count: count\n  }\n}));"
+        },
+        "id": "wf14-agg-stats",
+        "name": "Aggregate 24h Stats",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          500
+        ]
       },
       {
         "parameters": {
@@ -3167,7 +3501,7 @@
         "main": [
           [
             {
-              "node": "Merge Data",
+              "node": "Filter Top Opportunities",
               "type": "main",
               "index": 0
             }
@@ -3178,9 +3512,9 @@
         "main": [
           [
             {
-              "node": "Merge Data",
+              "node": "Aggregate 24h Stats",
               "type": "main",
-              "index": 1
+              "index": 0
             }
           ]
         ]
@@ -3203,6 +3537,28 @@
               "node": "Send Digest Email",
               "type": "main",
               "index": 0
+            }
+          ]
+        ]
+      },
+      "Filter Top Opportunities": {
+        "main": [
+          [
+            {
+              "node": "Merge Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Aggregate 24h Stats": {
+        "main": [
+          [
+            {
+              "node": "Merge Data",
+              "type": "main",
+              "index": 1
             }
           ]
         ]
@@ -3239,108 +3595,98 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT\n  COUNT(*) as total_leads,\n  COUNT(*) FILTER (WHERE overall_score >= 0.85) as hot_leads,\n  COUNT(*) FILTER (WHERE overall_score >= 0.70 AND overall_score < 0.85) as warm_leads,\n  COUNT(*) FILTER (WHERE overall_score >= 0.30 AND overall_score < 0.70) as cold_leads,\n  COALESCE(SUM(estimated_budget_high), SUM(estimated_budget_low), 0) as total_pipeline_value,\n  AVG(overall_score) as avg_score\nFROM opportunities\nWHERE discovered_at >= NOW() - INTERVAL '7 days';",
+          "operation": "readAllRows",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_OPPORTUNITIES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "opportunities",
+            "mode": "name"
+          },
           "options": {}
         },
-        "id": "wf15-summary",
-        "name": "Fetch Weekly Summary",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "id": "wf15-read-all",
+        "name": "Read All Opportunities",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           490,
           200
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT source, COUNT(*) as count, AVG(overall_score) as avg_score FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '7 days' GROUP BY source ORDER BY count DESC;",
-          "options": {}
+          "jsCode": "const cutoff = new Date(Date.now() - 7*24*60*60*1000).toISOString();\nconst recent = $input.all().filter(item => item.json.discovered_at >= cutoff);\nconst totalLeads = recent.length;\nconst hotLeads = recent.filter(i => parseFloat(i.json.overall_score || 0) >= 0.85).length;\nconst warmLeads = recent.filter(i => parseFloat(i.json.overall_score || 0) >= 0.70 && parseFloat(i.json.overall_score || 0) < 0.85).length;\nconst coldLeads = recent.filter(i => parseFloat(i.json.overall_score || 0) >= 0.30 && parseFloat(i.json.overall_score || 0) < 0.70).length;\nconst totalPipeline = recent.reduce((sum, i) => sum + (parseFloat(i.json.estimated_budget_high || i.json.estimated_budget_low || 0)), 0);\nconst avgScore = totalLeads > 0 ? recent.reduce((sum, i) => sum + parseFloat(i.json.overall_score || 0), 0) / totalLeads : 0;\nreturn [{ json: { total_leads: totalLeads, hot_leads: hotLeads, warm_leads: warmLeads, cold_leads: coldLeads, total_pipeline_value: totalPipeline, avg_score: avgScore } }];"
+        },
+        "id": "wf15-summary",
+        "name": "Fetch Weekly Summary",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          740,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const cutoff = new Date(Date.now() - 7*24*60*60*1000).toISOString();\nconst recent = $input.all().filter(item => item.json.discovered_at >= cutoff);\nconst sourceMap = {};\nfor (const item of recent) {\n  const src = item.json.source || 'unknown';\n  if (!sourceMap[src]) sourceMap[src] = { count: 0, totalScore: 0 };\n  sourceMap[src].count++;\n  sourceMap[src].totalScore += parseFloat(item.json.overall_score || 0);\n}\nreturn Object.entries(sourceMap).sort((a,b) => b[1].count - a[1].count).map(([source, data]) => ({\n  json: { source, count: data.count, avg_score: data.count > 0 ? data.totalScore / data.count : 0 }\n}));"
         },
         "id": "wf15-bysource",
         "name": "Leads by Source",
-        "type": "n8n-nodes-base.postgres",
+        "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          490,
+          740,
           350
-        ],
-        "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
-          }
-        }
+        ]
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT industry, COUNT(*) as count, AVG(overall_score) as avg_score FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '7 days' AND industry IS NOT NULL AND industry != '' GROUP BY industry ORDER BY count DESC LIMIT 10;",
-          "options": {}
+          "jsCode": "const cutoff = new Date(Date.now() - 7*24*60*60*1000).toISOString();\nconst recent = $input.all().filter(item => item.json.discovered_at >= cutoff && item.json.industry && item.json.industry !== '');\nconst industryMap = {};\nfor (const item of recent) {\n  const ind = item.json.industry;\n  if (!industryMap[ind]) industryMap[ind] = { count: 0, totalScore: 0 };\n  industryMap[ind].count++;\n  industryMap[ind].totalScore += parseFloat(item.json.overall_score || 0);\n}\nreturn Object.entries(industryMap).sort((a,b) => b[1].count - a[1].count).slice(0, 10).map(([industry, data]) => ({\n  json: { industry, count: data.count, avg_score: data.count > 0 ? data.totalScore / data.count : 0 }\n}));"
         },
         "id": "wf15-byindustry",
         "name": "Leads by Industry",
-        "type": "n8n-nodes-base.postgres",
+        "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          490,
+          740,
           500
-        ],
-        "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
-          }
-        }
+        ]
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT COUNT(*) as prev_total, AVG(overall_score) as prev_avg_score FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '14 days' AND discovered_at < NOW() - INTERVAL '7 days';",
-          "options": {}
+          "jsCode": "const cutoff14 = new Date(Date.now() - 14*24*60*60*1000).toISOString();\nconst cutoff7 = new Date(Date.now() - 7*24*60*60*1000).toISOString();\nconst prevWeek = $input.all().filter(item => item.json.discovered_at >= cutoff14 && item.json.discovered_at < cutoff7);\nconst prevTotal = prevWeek.length;\nconst prevAvg = prevTotal > 0 ? prevWeek.reduce((sum, i) => sum + parseFloat(i.json.overall_score || 0), 0) / prevTotal : 0;\nreturn [{ json: { prev_total: prevTotal, prev_avg_score: prevAvg } }];"
         },
         "id": "wf15-prev",
         "name": "Previous Week Stats",
-        "type": "n8n-nodes-base.postgres",
+        "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          490,
+          740,
           650
-        ],
-        "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
-          }
-        }
+        ]
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT title, overall_score, source, source_url, company_name, industry, estimated_budget_low, estimated_budget_high, ai_summary FROM opportunities WHERE discovered_at >= NOW() - INTERVAL '7 days' AND overall_score >= 0.70 ORDER BY overall_score DESC LIMIT 5;",
-          "options": {}
+          "jsCode": "const cutoff = new Date(Date.now() - 7*24*60*60*1000).toISOString();\nreturn $input.all()\n  .filter(item => item.json.discovered_at >= cutoff && parseFloat(item.json.overall_score || 0) >= 0.70)\n  .sort((a, b) => parseFloat(b.json.overall_score || 0) - parseFloat(a.json.overall_score || 0))\n  .slice(0, 5)\n  .map(item => ({ json: item.json }));"
         },
         "id": "wf15-top",
         "name": "Top 5 Opportunities",
-        "type": "n8n-nodes-base.postgres",
+        "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          490,
+          740,
           800
-        ],
-        "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
-          }
-        }
+        ]
       },
       {
         "parameters": {
@@ -3385,27 +3731,7 @@
         "main": [
           [
             {
-              "node": "Fetch Weekly Summary",
-              "type": "main",
-              "index": 0
-            },
-            {
-              "node": "Leads by Source",
-              "type": "main",
-              "index": 0
-            },
-            {
-              "node": "Leads by Industry",
-              "type": "main",
-              "index": 0
-            },
-            {
-              "node": "Previous Week Stats",
-              "type": "main",
-              "index": 0
-            },
-            {
-              "node": "Top 5 Opportunities",
+              "node": "Read All Opportunities",
               "type": "main",
               "index": 0
             }
@@ -3477,6 +3803,37 @@
             }
           ]
         ]
+      },
+      "Read All Opportunities": {
+        "main": [
+          [
+            {
+              "node": "Fetch Weekly Summary",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leads by Source",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Leads by Industry",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Previous Week Stats",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Top 5 Opportunities",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "active": false,
@@ -3519,24 +3876,46 @@
       },
       {
         "parameters": {
-          "operation": "executeQuery",
-          "query": "SELECT id, title, description, source, source_url, company_name, contact_name, contact_email, industry, ai_summary, ai_tags, ai_reasoning, overall_score, relevance_score, budget_score, estimated_budget_low, estimated_budget_high, deadline, location, raw_data FROM opportunities WHERE id = '{{ $json.opportunity_id }}' LIMIT 1;",
+          "operation": "readAllRows",
+          "documentId": {
+            "__rl": true,
+            "value": "={{ $env.GOOGLE_SHEET_ID_OPPORTUNITIES }}",
+            "mode": "expression"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "opportunities",
+            "mode": "name"
+          },
           "options": {}
         },
         "id": "wf16-load",
         "name": "Load Opportunity",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2,
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.4,
         "position": [
           740,
           300
         ],
         "credentials": {
-          "postgres": {
-            "id": "cred-pg",
-            "name": "DealHunter PostgreSQL"
+          "googleSheetsOAuth2Api": {
+            "id": "cred-gsheets",
+            "name": "Google Sheets"
           }
         }
+      },
+      {
+        "parameters": {
+          "jsCode": "const opportunityId = $('Validate Input').first().json.opportunity_id;\nconst found = $input.all().find(item => item.json.id === opportunityId);\nif (found) {\n  return [{ json: found.json }];\n}\nreturn [{ json: {} }];"
+        },
+        "id": "wf16-filter-by-id",
+        "name": "Filter By ID",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          990,
+          300
+        ]
       },
       {
         "parameters": {
@@ -3585,18 +3964,10 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "https://api.anthropic.com/v1/messages",
+          "url": "={{ `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${$env.GOOGLE_AI_API_KEY}` }}",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
-              {
-                "name": "x-api-key",
-                "value": "={{ $env.ANTHROPIC_API_KEY }}"
-              },
-              {
-                "name": "anthropic-version",
-                "value": "2023-06-01"
-              },
               {
                 "name": "content-type",
                 "value": "application/json"
@@ -3605,10 +3976,10 @@
           },
           "sendBody": true,
           "contentType": "json",
-          "jsonBody": "={{ JSON.stringify({model: 'claude-sonnet-4-6', max_tokens: 600, messages: [{role: 'user', content: $json.prompt}]}) }}",
+          "jsonBody": "={{ JSON.stringify({contents: [{parts: [{text: $json.prompt}]}], generationConfig: {maxOutputTokens: 600, temperature: 0.7}}) }}",
           "options": {}
         },
-        "id": "wf16-claude",
+        "id": "wf16-gemini",
         "name": "Generate Outreach Email",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
@@ -3619,7 +3990,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const items = $input.all();\nconst claudeResponse = items[0].json;\nconst emailText = claudeResponse.content && claudeResponse.content[0] ? claudeResponse.content[0].text : '';\n\nconst oppData = $('Build Outreach Prompt').first().json.opp;\n\nreturn [{\n  json: {\n    success: true,\n    opportunity_id: oppData.id,\n    opportunity_title: oppData.title,\n    company_name: oppData.company_name,\n    outreach_email: emailText,\n    generated_at: new Date().toISOString(),\n    metadata: {\n      source: oppData.source,\n      overall_score: oppData.overall_score,\n      industry: oppData.industry\n    }\n  }\n}];"
+          "jsCode": "const items = $input.all();\nconst geminiResponse = items[0].json;\nconst emailText = geminiResponse.candidates && geminiResponse.candidates[0] ? geminiResponse.candidates[0].content.parts[0].text : '';\n\nconst oppData = $('Build Outreach Prompt').first().json.opp;\n\nreturn [{\n  json: {\n    success: true,\n    opportunity_id: oppData.id,\n    opportunity_title: oppData.title,\n    company_name: oppData.company_name,\n    outreach_email: emailText,\n    generated_at: new Date().toISOString(),\n    metadata: {\n      source: oppData.source,\n      overall_score: oppData.overall_score,\n      industry: oppData.industry\n    }\n  }\n}];"
         },
         "id": "wf16-format",
         "name": "Format Response",
@@ -3692,7 +4063,7 @@
         "main": [
           [
             {
-              "node": "Opportunity Found",
+              "node": "Filter By ID",
               "type": "main",
               "index": 0
             }
@@ -3744,6 +4115,17 @@
           [
             {
               "node": "Return Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filter By ID": {
+        "main": [
+          [
+            {
+              "node": "Opportunity Found",
               "type": "main",
               "index": 0
             }

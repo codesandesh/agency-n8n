@@ -1,0 +1,928 @@
+
+DEALHUNTER
+Agentic AI Lead Generation System
+Requirements Document for n8n Automation Engineer
+
+
+
+Prepared by
+Ujjwal Roy
+CEO, ScaleBuild AI (Junkiri Labs LLC)
+
+Version 1.0  |  March 2026
+CONFIDENTIAL
+Table of Contents
+1. Executive Summary
+2. Project Overview & Objectives
+3. System Architecture
+4. Data Source Master List (17 Categories, 100+ Sources)
+5. Source-by-Source Specifications
+6. AI Scoring & Classification Pipeline
+7. n8n Workflow Architecture
+8. Database Schema
+9. Notification & Alert System
+10. Dashboard & Reporting Requirements
+11. Auto-Outreach Generation
+12. Infrastructure & Deployment
+13. Testing & Quality Assurance
+14. Implementation Phases & Timeline
+15. Success Metrics & KPIs
+
+1. Executive Summary
+ScaleBuild AI requires an automated lead generation system (codename: DealHunter) that continuously scrapes, monitors, and analyzes the internet for private-sector custom software development opportunities, RFPs, and project leads. The system will be built primarily using n8n as the workflow orchestration engine, with supporting infrastructure for AI scoring, data storage, and notification delivery.
+The system must monitor 100+ sources across 17 categories, process thousands of potential opportunities daily, score them using AI (Claude API), extract structured contact and project data, deduplicate results, and deliver high-quality leads to the ScaleBuild AI sales team via Slack, email, and a dashboard.
+Target Verticals: Custom AI/ML software development, computer vision systems (manufacturing QC, security), enterprise workflow automation, SaaS product development, full-stack web/mobile applications, data analytics and pipeline engineering.
+Scope: Private sector only. No government contracts, no SAM.gov, no federal/state procurement.
+
+2. Project Overview & Objectives
+2.1 Business Context
+ScaleBuild AI (Junkiri Labs LLC) is a custom AI/ML software development company. The CEO, Ujjwal Roy, has engineering leadership experience at Intel, Micron, and IBM, plus a Wall Street finance background. The company portfolio includes Seethos AI (computer vision), Scalova (AI Co-Pilot platform), Hyperscaler (AI-human hybrid outsourcing), and Pegasus AI (AI wearable).
+Currently, lead generation relies on manual LinkedIn outreach, cold email campaigns, and referrals. DealHunter will automate the discovery of inbound-style project opportunities from across the internet, creating a persistent competitive advantage.
+2.2 Primary Objectives
+    1. Discover 50-100+ new qualified software development opportunities per week from private sector sources.
+    2. Score every opportunity using AI to surface only the most relevant leads (target: top 20% by relevance).
+    3. Extract structured data (company, contact, budget, deadline, tech requirements) from unstructured listings.
+    4. Deduplicate across all sources to prevent the same opportunity from appearing multiple times.
+    5. Deliver real-time alerts for high-scoring opportunities and daily digest reports.
+    6. Auto-generate personalized outreach drafts in Ujjwal Roy's voice for top leads.
+    7. Provide a dashboard showing pipeline, source performance, and trend analytics.
+2.3 What We Are NOT Building
+    • No government/public sector RFP monitoring
+    • No automated bidding or proposal submission
+    • No CRM replacement (DealHunter feeds leads into existing systems)
+    • No automated outreach sending (human review before any contact)
+
+3. System Architecture
+3.1 Core Technology Stack
+Component
+Technology
+Workflow Orchestration
+n8n (self-hosted)
+AI Scoring Engine
+Anthropic Claude API (Sonnet for scoring, Haiku for extraction)
+Database
+PostgreSQL 16
+Cache / Queue
+Redis
+Web Scraping
+HTTP Request nodes, Playwright (via n8n Code nodes or microservice)
+Notifications
+Slack API, SendGrid (email), Twilio (SMS)
+Dashboard
+Retool or custom React + Tailwind frontend
+Hosting
+Docker Compose on VPS (DigitalOcean/AWS EC2)
+
+3.2 Architecture Flow
+The system operates as a 3-layer pipeline:
+Layer 1 - Ingestion: n8n cron-triggered workflows scrape each source on a configured schedule. Raw data is normalized into a standard RawOpportunity format and stored in a staging table.
+Layer 2 - Intelligence: A keyword pre-filter eliminates obvious non-matches (WordPress themes, logo design, SEO services). Surviving opportunities are sent to Claude for AI scoring (relevance, budget, urgency, win probability) and entity extraction (company, contact, budget, deadline).
+Layer 3 - Action: Scored opportunities above threshold are deduplicated, stored in the main opportunities table, and routed to notifications. High-scoring leads trigger instant Slack/email alerts. All leads appear on the dashboard. An outreach draft generator is available on demand.
+
+4. Data Source Master List
+The following 17 categories encompass 100+ individual sources to be monitored. Each source is assigned a priority level (Critical, High, Medium, Low) based on signal quality, lead volume, and ease of scraping.
+
+4.1 Category 1: Freelance & Project Marketplaces
+Highest-intent sources. People are actively posting projects with budgets and requirements.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+Upwork
+RSS Feeds by category
+Critical
+2
+Freelancer.com
+API (REST)
+High
+3
+Toptal Project Board
+Web scrape (Playwright)
+High
+4
+Guru.com
+Web scrape
+Medium
+5
+PeoplePerHour
+Web scrape / RSS
+Medium
+6
+Contra.com
+Web scrape / API
+Medium
+7
+Fiverr Business
+Web scrape
+Low
+8
+Codeable
+Web scrape (WordPress projects)
+Low
+
+4.2 Category 2: Reddit
+Gold mine for catching founders and business owners in the decision moment. Use Reddit API (OAuth) or JSON endpoints.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+r/forhire ([Hiring] flair)
+Reddit API
+Critical
+2
+r/startups
+Reddit API
+Critical
+3
+r/SaaS
+Reddit API
+High
+4
+r/smallbusiness
+Reddit API
+High
+5
+r/Entrepreneur
+Reddit API
+High
+6
+r/cofounder
+Reddit API
+High
+7
+r/MachineLearning
+Reddit API
+Medium
+8
+r/artificial
+Reddit API
+Medium
+9
+r/webdev
+Reddit API
+Medium
+10
+r/AppIdeas
+Reddit API
+Medium
+11
+r/hwstartups
+Reddit API
+Low
+12
+r/iOSProgramming
+Reddit API
+Low
+13
+r/androiddev
+Reddit API
+Low
+14
+r/devops
+Reddit API
+Low
+15
+r/CTO
+Reddit API
+Low
+16
+r/nocode
+Reddit API
+Medium
+17
+r/lowcode
+Reddit API
+Medium
+
+Keyword Filters: "looking for developer", "need app built", "looking for agency", "need software built", "technical cofounder", "outsource development", "MVP development", "looking for AI", "need automation", "RFP", "budget", "hiring team", "outgrown Bubble", "need custom code", "migrate from no-code"
+
+4.3 Category 3: Hacker News (Y Combinator)
+High-quality leads from the YC/startup ecosystem.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+Monthly "Who is Hiring?" thread
+Algolia API (hn.algolia.com)
+Critical
+2
+"Ask HN" posts (needing dev help)
+Algolia API
+High
+3
+"Show HN" comments (need-based)
+Algolia API
+Medium
+
+4.4 Category 4: LinkedIn
+Richest B2B signal source but most restricted for scraping. Multiple approaches required.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+LinkedIn Jobs (contract/project filter)
+API / Google proxy search
+High
+2
+LinkedIn Posts (keyword signals)
+Google: site:linkedin.com/posts
+High
+3
+Sales Navigator CSV import
+Manual CSV upload pipeline
+Medium
+Keyword Signals: "looking for a tech partner", "need a development team", "evaluating vendors", "building MVP", "looking for technical cofounder", "RFP for software"
+
+4.5 Category 5: Twitter/X
+Founders and CTOs frequently tweet about needing development help. Use X API v2 filtered stream.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+X filtered stream (keyword rules)
+X API v2
+High
+2
+X search (periodic polling)
+X API v2 search
+Medium
+Search Query: "looking for developer" OR "need app built" OR "looking for agency" OR "need CTO" OR "building MVP" OR "looking for technical" -job -hiring
+
+4.6 Category 6: Agency Matching & RFP Platforms
+Companies actively posting project briefs seeking agency/vendor partners.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+Clutch.co project briefs
+Web scrape (Playwright)
+Critical
+2
+GoodFirms.co RFP board
+Web scrape
+High
+3
+GetProjects.ai
+Web scrape / API
+High
+4
+DesignRush.com
+Web scrape
+Medium
+5
+Sortlist.com
+Web scrape
+Medium
+6
+Credo (getcredo.com)
+Web scrape
+Medium
+7
+UpCity
+Web scrape
+Low
+8
+Agency Spotter
+Web scrape
+Low
+9
+Bark.com (tech services)
+Web scrape
+Low
+
+4.7 Category 7: Private Sector RFP Aggregators
+Dedicated platforms aggregating private-sector RFPs across industries.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+RFPZone.com (private sector filter)
+Web scrape
+High
+2
+InstantMarkets.com (private sector filter)
+Web scrape
+Medium
+3
+FindRFP.com (corporate section)
+Web scrape / RSS
+Medium
+4
+RFP Database (rfpdb.com)
+Web scrape
+Medium
+
+4.8 Category 8: B2B Buyer Intent Data Platforms
+These platforms identify companies actively researching topics like "custom software development" or "AI implementation" based on content consumption patterns across thousands of B2B websites. This is the most proactive lead source because it surfaces buyers BEFORE they post an RFP.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+Bombora (Company Surge data)
+API integration
+Critical
+2
+ZoomInfo (intent + contacts)
+API integration
+High
+3
+6sense (predictive buying stage)
+API integration
+Medium
+4
+G2 Buyer Intent
+API / webhook
+Medium
+5
+TechTarget Priority Engine
+API integration
+Low
+6
+TrustRadius intent signals
+API / webhook
+Low
+Note: Bombora data is also embedded within ZoomInfo, 6sense, and Demandbase. Verify existing subscriptions before purchasing separately. Expected budget: $25,000-75,000/year for Bombora standalone.
+Intent Topics to Monitor: "custom software development", "AI implementation", "machine learning platform", "enterprise automation", "digital transformation consulting", "computer vision systems", "workflow automation", "SaaS development agency"
+
+4.9 Category 9: Venture Funding & Growth Signals
+Recently funded startups almost always need development help within 3-6 months. Companies posting multiple engineering job listings but failing to hire are ripe for outsourcing pitches.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+Crunchbase (Seed/Series A/B)
+Crunchbase API
+High
+2
+PitchBook
+API / web scrape
+Medium
+3
+TechCrunch funding announcements
+RSS / web scrape
+Medium
+4
+LinkedIn job posting surge detection
+API / Google proxy
+Medium
+5
+Indeed/Glassdoor engineering hiring signals
+Web scrape
+Low
+Logic: If a company raised $2M-$50M AND has <5 engineers on LinkedIn AND is posting 3+ engineering roles, they are a high-probability ScaleBuild lead.
+
+4.10 Category 10: No-Code Community "Graduation" Signals
+Founders who built MVPs on no-code platforms and hit scaling/feature walls are extremely high-conversion leads. They already have a working product and revenue; they just need professional development to take it to the next level.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+Bubble Forum (forum.bubble.io)
+Web scrape / RSS
+High
+2
+Webflow Forum
+Web scrape / RSS
+High
+3
+Retool Community
+Web scrape
+Medium
+4
+Airtable Community
+Web scrape
+Medium
+5
+Make (Integromat) Community
+Web scrape
+Medium
+6
+Zapier Community
+Web scrape
+Low
+7
+r/nocode + r/lowcode
+Reddit API
+Medium
+Keyword Signals: "outgrown Bubble", "too slow", "need custom functionality", "migrate to custom code", "Bubble limitations", "Webflow can't do", "need a real developer", "scaling issues", "performance problems"
+
+4.11 Category 11: Slack Communities
+Higher-value founder communities often live on Slack. Monitor #hiring, #looking-for, #need-help, and #partnerships channels.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+#Launch (4,300+ members)
+Slack bot / RSS bridge
+High
+2
+Startup Study Group (6,800+)
+Slack bot / RSS bridge
+High
+3
+TechMasters (2,700+)
+Slack bot / RSS bridge
+Medium
+4
+SaaS Community (650+)
+Slack bot / RSS bridge
+Medium
+5
+CollabHub
+Slack bot / RSS bridge
+Medium
+6
+Indie Worldwide (2,000+)
+Slack bot / RSS bridge
+Medium
+7
+Ramen Club
+Slack bot / RSS bridge
+Low
+8
+Salesforge HQ
+Slack bot / RSS bridge
+Low
+9
+SMB-TECH
+Slack bot / RSS bridge
+Low
+
+4.12 Category 12: Discord Servers
+#
+Source / Platform
+Scraping Method
+Priority
+1
+Indie Hackers Discord
+Discord bot (discord.py)
+Medium
+2
+YC Founders Discord
+Discord bot
+Medium
+3
+Buildspace
+Discord bot
+Low
+4
+Dev.to Community
+Discord bot
+Low
+
+4.13 Category 13: Startup & Founder Communities (Web)
+#
+Source / Platform
+Scraping Method
+Priority
+1
+Indie Hackers (indiehackers.com)
+Web scrape / RSS
+High
+2
+Product Hunt Discussions
+Web scrape / API
+Medium
+3
+BetaList.com
+Web scrape / RSS
+Medium
+4
+Wellfound / AngelList (contract jobs)
+Web scrape / API
+Medium
+5
+F6S.com
+Web scrape
+Low
+6
+MicroConf Community
+Web scrape
+Low
+7
+HackerNoon
+RSS
+Low
+
+4.14 Category 14: Craigslist
+Surprisingly overlooked. The "Computer Gigs" section in major metros still gets real project postings from local businesses. Low volume but near-zero competition.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+NYC Computer Gigs
+RSS / web scrape
+Medium
+2
+SF Bay Area Computer Gigs
+RSS / web scrape
+Medium
+3
+LA Computer Gigs
+RSS / web scrape
+Low
+4
+Chicago Computer Gigs
+RSS / web scrape
+Low
+5
+Austin Computer Gigs
+RSS / web scrape
+Low
+
+4.15 Category 15: Quora
+People asking questions like "Where can I find a good software development company?" are often the buyer themselves.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+Quora Topics: Software Development, Startups, SaaS
+Web scrape / RSS
+Medium
+2
+Quora Questions (buyer-intent keywords)
+Web scrape
+Medium
+
+4.16 Category 16: G2 & TrustRadius Buyer Intent
+Companies researching "custom software development tools" or "AI platforms" on G2 and not finding a good off-the-shelf fit are potential custom development buyers.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+G2 Buyer Intent (category research)
+API / webhook
+Medium
+2
+TrustRadius (comparison shoppers)
+API / webhook
+Low
+
+4.17 Category 17: Google Alerts, Medium, Telegram & Misc.
+#
+Source / Platform
+Scraping Method
+Priority
+1
+Google Alerts (via SerpAPI)
+SerpAPI / Google Alerts RSS
+High
+2
+Medium (The Startup, Better Programming)
+RSS / web scrape
+Low
+3
+Telegram (startup/founder groups)
+Telegram Bot API
+Low
+4
+Substack (SaaS/startup newsletters)
+RSS
+Low
+5
+Job boards (Indeed contract postings)
+Web scrape / API
+Low
+Google Alert Queries: "request for proposal" "software development" -government, "looking for AI development company", "need custom software built" site:medium.com, "evaluating software vendors" site:linkedin.com, "ISO software development partner" -government
+
+5. Source-by-Source Scraping Specifications
+For each source, the n8n automation engineer must implement the following standardized pipeline.
+
+5.1 Standard Data Model: RawOpportunity
+Every scraper must output data conforming to this schema before it enters the AI pipeline:
+Field
+Type / Description
+Required
+title
+String (max 500 chars). The opportunity headline.
+Yes
+description
+Text. Full description of the opportunity.
+Yes
+source
+String. Scraper identifier (e.g., "upwork", "reddit_forhire", "clutch").
+Yes
+source_url
+URL. Direct link to the original listing.
+Yes
+source_id
+String. Unique identifier from the source for deduplication.
+Yes
+posted_at
+DateTime (ISO 8601). When the opportunity was originally posted.
+If available
+company_name
+String. Company or person who posted.
+If available
+contact_email
+String. Contact email if visible.
+If available
+estimated_budget
+String. Raw budget text (e.g., "$10K-$50K", "Not specified").
+If available
+deadline
+String. Raw deadline text.
+If available
+location
+String. Geographic location of the client.
+If available
+tags
+Array of strings. Pre-extracted keywords from the listing.
+If available
+raw_data
+JSON. Complete scraped payload for debugging and re-processing.
+Yes
+
+5.2 Scraping Specifications by Source
+Upwork (Critical)
+Method: RSS feeds polled every 30 minutes via n8n RSS Read node.
+Feed URL Pattern: https://www.upwork.com/ab/feed/jobs/rss?q=<query>&sort=recency
+Search Queries (rotate): "custom software development", "AI ML development", "python developer project", "full stack development project", "computer vision project", "enterprise application development", "SaaS development", "workflow automation"
+Budget Filter: Prioritize projects with budgets >$5,000. Include unknown-budget projects if description signals enterprise scope.
+Rate Limit: 5 requests per minute.
+
+Reddit (Critical)
+Method: Reddit OAuth API via n8n HTTP Request node. Authenticate with client_id/client_secret. Poll each subreddit's /new.json endpoint every 30 minutes.
+Dedup Key: Reddit post permalink.
+Rate Limit: 30 requests per minute with OAuth token.
+Special Logic: For r/forhire, only capture posts with [Hiring] flair. For all other subreddits, apply keyword filter to both title and selftext.
+
+Hacker News (Critical)
+Method: Algolia API via n8n HTTP Request node.
+Endpoint: https://hn.algolia.com/api/v1/search_by_date
+Logic: Scrape the monthly "Who is Hiring?" thread. Also search for "Ask HN" posts mentioning "looking for developer", "need to build", "hiring contractor", "looking for agency".
+Rate Limit: 30 requests per minute.
+
+Clutch.co (Critical)
+Method: Playwright-based scraping via n8n Code node (or microservice). Dynamic content requires browser rendering.
+Target: Project briefs in AI Development, Custom Software Development, Web Development, Mobile App Development categories.
+Extract: Project description, company size, budget range, timeline, industry.
+Rate Limit: 5 requests per minute. Rotate user agents.
+
+The n8n engineer should follow the same pattern for every source: configure the specific API/scraping method, normalize output to the RawOpportunity schema, apply source-specific rate limits, and feed into the shared AI scoring pipeline.
+
+6. AI Scoring & Classification Pipeline
+6.1 Pre-Filter (Keyword Classifier)
+Before sending to the Claude API (to control costs), every RawOpportunity passes through a keyword-based pre-filter implemented as an n8n Function node.
+HIGH PRIORITY (pass immediately): "artificial intelligence", "machine learning", "computer vision", "deep learning", "neural network", "NLP", "automation platform", "AI system", "custom software", "enterprise application", "data pipeline", "workflow automation"
+MEDIUM PRIORITY (pass): "web application", "mobile app", "SaaS", "analytics dashboard", "API development", "cloud migration", "full stack", "MVP"
+LOW PRIORITY / SKIP: "WordPress theme", "Shopify theme", "logo design", "SEO services", "social media management", "content writing", "virtual assistant", "data entry"
+If an opportunity has 0 keyword matches from HIGH or MEDIUM lists, skip Claude scoring entirely.
+
+6.2 Claude AI Scoring Prompt
+For opportunities passing the pre-filter, send to Claude Sonnet via n8n HTTP Request node (Anthropic API).
+
+The scoring prompt instructs Claude to evaluate each opportunity as a business development analyst for ScaleBuild AI, scoring four dimensions from 0.0 to 1.0:
+
+    • relevance_score: How well the opportunity matches ScaleBuild's services (1.0 = perfect AI/ML custom dev match, 0.0 = completely unrelated).
+    • budget_score: Budget attractiveness (1.0 = $100K+, 0.8 = $50-100K, 0.6 = $25-50K, 0.4 = $10-25K, 0.2 = <$10K, 0.5 = unknown but substantial).
+    • urgency_score: Time sensitivity (1.0 = deadline within 1 week, 0.7 = 1 month, 0.4 = 3 months, 0.2 = no deadline).
+    • win_probability: Estimated likelihood ScaleBuild could win (considers scope, competition, and strengths).
+
+Overall Score Formula: relevance_score * 0.35 + budget_score * 0.25 + urgency_score * 0.15 + win_probability * 0.25
+
+Claude must also return: a 2-3 sentence summary, industry vertical tag, keyword tags array, and reasoning for the scores. All responses in JSON format.
+
+6.3 Entity Extraction
+For opportunities scoring above 0.3 overall, run a second Claude call (using Haiku for cost efficiency) to extract structured fields: company_name, contact_name, contact_email, contact_phone, estimated_budget_low, estimated_budget_high, deadline (YYYY-MM-DD), location, tech_stack_mentioned, project_duration, and team_size_needed.
+
+6.4 Scoring Thresholds
+Overall Score
+Action
+Notification
+0.85 - 1.0
+Store + instant alert + auto-generate outreach draft
+Slack + Email + SMS
+0.70 - 0.84
+Store + daily digest inclusion
+Slack + Email (digest)
+0.30 - 0.69
+Store for dashboard review
+None (dashboard only)
+< 0.30
+Discard (do not store)
+None
+
+7. n8n Workflow Architecture
+The n8n implementation should be organized as modular, reusable workflows.
+
+7.1 Master Workflows
+Workflow 1 - Source Scraper (per source): Cron trigger (source-specific schedule) > HTTP Request / RSS Read / Code node > Transform to RawOpportunity schema > Write to staging table (PostgreSQL) > Log scrape run.
+Workflow 2 - AI Processing Pipeline: Triggered by new rows in staging table > Keyword pre-filter (Function node) > Claude scoring (HTTP Request to Anthropic API) > Calculate overall score > Entity extraction (if score >= 0.3) > Deduplication check (PostgreSQL query) > Write to opportunities table.
+Workflow 3 - Notification Router: Triggered by new high-scoring opportunities > Route by score threshold > Instant alert (Slack + Email) for score >= 0.85 > Queue for daily digest for score 0.70-0.84.
+Workflow 4 - Daily Digest: Cron trigger at 8:00 AM ET daily > Query opportunities from last 24 hours with score >= 0.70 > Format HTML email > Send via SendGrid.
+Workflow 5 - Outreach Generator (on-demand): Webhook trigger from dashboard > Load opportunity data > Claude prompt for personalized outreach email > Return draft to dashboard.
+
+7.2 Deduplication Logic
+Implement in n8n Function node or PostgreSQL query:
+    • Primary: Exact match on source + source_id (prevents same listing from same platform).
+    • Secondary: Fuzzy title match using trigram similarity (pg_trgm extension) with threshold 0.85 across all sources (prevents cross-platform duplicates).
+    • Tertiary: URL domain + description hash for edge cases.
+
+7.3 Rate Limiting & Error Handling
+    • Each source workflow must respect its configured rate limit using n8n Wait nodes or a Redis-based sliding window counter.
+    • All HTTP requests must have retry logic: 3 retries with exponential backoff (1s, 5s, 15s).
+    • One source failing must NEVER crash other source workflows.
+    • All scrape runs must be logged (source, start time, end time, items found, items new, errors).
+    • Implement proxy rotation for Playwright-based scrapers via a configurable proxy list.
+
+8. Database Schema (PostgreSQL)
+8.1 Table: opportunities
+Primary table storing all scored and deduplicated opportunities.
+Key fields: id (UUID, PK), title, description, source, source_url, source_id, company_name, contact_name, contact_email, contact_phone, estimated_budget_low (float), estimated_budget_high (float), deadline, location, industry, relevance_score, budget_score, urgency_score, win_probability, overall_score, ai_summary, ai_tags (JSON array), ai_reasoning, status (enum: new/reviewed/contacted/qualified/disqualified/won/lost), is_notified (boolean), discovered_at, posted_at, updated_at, raw_data (JSON).
+
+8.2 Table: sources
+Configuration table for all monitored sources.
+Key fields: id (UUID, PK), name, type (api/scrape/rss), url, is_active (boolean), last_scraped_at, scrape_frequency_minutes, config (JSON for source-specific params like search terms), created_at.
+
+8.3 Table: scrape_logs
+Audit trail for every scrape run.
+Key fields: id (UUID, PK), source_name, started_at, finished_at, status (success/failed/partial), items_found, items_new, items_scored, error_message, created_at.
+
+8.4 Table: staging_raw
+Temporary staging table for raw scraped data before AI processing.
+Key fields: id (serial, PK), raw_opportunity (JSON), source, is_processed (boolean), created_at.
+
+8.5 Required Extensions
+    • pg_trgm (for fuzzy text matching / deduplication)
+    • uuid-ossp (for UUID generation)
+
+9. Notification & Alert System
+9.1 Instant Alerts (score >= 0.85)
+Within 5 minutes of discovery, send:
+    • Slack: Message to #dealhunter-alerts channel with: opportunity title, source, overall score, AI summary, budget estimate, deadline, and direct link to source.
+    • Email: To ujjwal@scalebuild.ai with formatted HTML containing full opportunity details, scoring breakdown, and one-click link to dashboard.
+    • SMS (score >= 0.95 only): Brief text to Ujjwal's phone via Twilio: "DealHunter: [Score] - [Title] - [Source]. Check dashboard."
+
+9.2 Daily Digest (8:00 AM ET)
+HTML email containing:
+    • Summary stats: total found (24h), new high-score leads, by-source breakdown.
+    • Top 10 opportunities ranked by overall_score with title, source, score, budget, and link.
+    • Trend comparison vs. previous day/week.
+
+9.3 Weekly Report (Monday 9:00 AM ET)
+    • Comprehensive report: total pipeline value, conversion rates by source, new vs. returning leads, top industries, geographic distribution.
+
+10. Dashboard & Reporting Requirements
+Build using Retool (preferred for speed) or a custom React + Tailwind frontend.
+
+10.1 Dashboard Home
+    • Stats cards: Total Opportunities, New Today, Average Score, Top Source This Week.
+    • Line chart: Opportunities discovered per day (last 30 days).
+    • Pie chart: Distribution by source.
+    • Table: Top 20 opportunities with sortable columns (title, source, score, budget, posted date, status).
+    • Filter panel: Date range, source, min score slider, industry, status, keyword search.
+
+10.2 Opportunity Detail View
+    • Full opportunity data with all extracted fields.
+    • AI scoring breakdown with visual bars for each dimension (relevance, budget, urgency, win probability).
+    • AI summary and reasoning prominently displayed.
+    • "Generate Outreach" button that triggers the outreach workflow and displays a draft email.
+    • Status update dropdown (New > Reviewed > Contacted > Qualified > Won/Lost).
+    • Link to original source listing.
+    • Collapsible raw data section for debugging.
+
+10.3 Sources Management
+    • List all sources with toggle switches (active/inactive).
+    • Last scrape time and success/failure indicator for each source.
+    • "Scrape Now" button per source for manual trigger.
+    • Add new source form (name, URL, type, frequency, keywords).
+    • Scrape log viewer with error details.
+
+11. Auto-Outreach Generation
+When triggered from the dashboard, generate a personalized outreach email using Claude with the following prompt structure:
+
+The prompt instructs Claude to write as Ujjwal Roy, CEO of ScaleBuild AI. Tone: direct, confident, no fluff, human-sounding, no em dashes. Length: 150-200 words max. Structure: Hook (reference their specific need), Credentials (relevant past work at Intel, IBM, Micron + specific AI/CV capabilities), Soft CTA.
+
+The prompt dynamically includes: opportunity summary, company name, industry, tech requirements detected, and relevant ScaleBuild capabilities (custom AI/ML development, computer vision for manufacturing/security, enterprise workflow automation, full-stack development).
+
+Sign-off:
+Ujjwal Roy
+CEO, ScaleBuild AI
+
+12. Infrastructure & Deployment
+12.1 Docker Compose Stack
+All services run via Docker Compose on a single VPS:
+    • n8n: Self-hosted n8n instance (latest stable) with PostgreSQL backend for workflow storage.
+    • PostgreSQL 16: Primary database for opportunities, sources, scrape logs.
+    • Redis 7: Caching layer for dedup hashes (TTL 30 days) and rate limiting counters.
+    • Playwright Service: Lightweight microservice (Node.js + Playwright) for dynamic page scraping, called from n8n Code nodes.
+    • Frontend: Retool (cloud-hosted) or containerized React app.
+
+12.2 Environment Variables
+Required configuration (provide via .env file):
+    • DATABASE_URL, REDIS_URL
+    • ANTHROPIC_API_KEY (for Claude scoring)
+    • SENDGRID_API_KEY (email notifications)
+    • SLACK_WEBHOOK_URL (Slack alerts)
+    • TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER (SMS)
+    • REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET
+    • X_API_BEARER_TOKEN (Twitter/X)
+    • CRUNCHBASE_API_KEY
+    • NOTIFICATION_EMAIL=ujjwal@scalebuild.ai
+
+12.3 Server Requirements
+    • Minimum: 4 vCPU, 8GB RAM, 100GB SSD
+    • Recommended: 8 vCPU, 16GB RAM, 200GB SSD
+    • Estimated monthly cost: $40-80 (DigitalOcean/Hetzner)
+    • Claude API costs: ~$50-150/month depending on volume
+
+13. Testing & Quality Assurance
+    • Test each scraper individually with mock data before connecting to the AI pipeline.
+    • Verify deduplication catches both exact matches and fuzzy cross-platform duplicates.
+    • Test AI scorer with 20+ sample opportunities spanning high-relevance, medium-relevance, and irrelevant listings. Verify JSON parsing is robust.
+    • Test the keyword pre-filter correctly skips WordPress/SEO/logo type listings.
+    • Verify all notification channels (Slack, email, SMS) deliver correctly.
+    • Load test: simulate 500 opportunities entering the pipeline simultaneously.
+    • Verify one source failing does not affect other sources.
+    • Verify scrape logs capture success/failure/partial status with error messages.
+
+14. Implementation Phases & Timeline
+Phase 1: Foundation (Week 1-2)
+    • Set up Docker Compose stack (n8n, PostgreSQL, Redis).
+    • Create database schema and seed sources table.
+    • Build the AI scoring pipeline (keyword pre-filter + Claude integration).
+    • Implement deduplication logic.
+    • Build first 3 scrapers: Upwork (RSS), Hacker News (Algolia API), Reddit (OAuth API).
+    • Wire end-to-end: scrape > score > store > Slack notification.
+
+Phase 2: Scale Sources (Week 3-4)
+    • Add remaining critical/high sources: Clutch, GoodFirms, GetProjects.ai, Freelancer.
+    • Add LinkedIn signal scraping (Google proxy approach).
+    • Add Twitter/X filtered stream.
+    • Add Crunchbase funding signals.
+    • Add no-code community scrapers (Bubble, Webflow forums).
+    • Implement daily digest email.
+
+Phase 3: Dashboard & Intelligence (Week 5-6)
+    • Build Retool dashboard (or custom React frontend).
+    • Implement outreach generator.
+    • Add remaining medium/low priority sources.
+    • Add Slack/Discord community monitoring.
+    • Add weekly report.
+    • Performance tuning and error handling hardening.
+
+Phase 4: Advanced (Week 7-8)
+    • Integrate B2B intent data (Bombora/ZoomInfo) if budget approved.
+    • Add Craigslist, Quora, and Google Alerts scrapers.
+    • Build source performance analytics (which sources produce highest-converting leads).
+    • Implement score model tuning based on historical conversion data.
+    • Documentation and handoff.
+
+15. Success Metrics & KPIs
+
+Metric
+Target
+Measurement
+New opportunities discovered / week
+50-100+
+PostgreSQL count
+High-score leads (>= 0.7) / week
+10-25
+PostgreSQL count
+Sources successfully scraped / run
+>= 90%
+Scrape log success rate
+Time from posting to discovery
+< 2 hours
+posted_at vs discovered_at delta
+Duplicate rate
+< 2%
+Manual audit
+AI scoring accuracy
+>= 80% relevance
+Manual review of top 50 leads
+Claude API cost / month
+< $150
+Anthropic dashboard
+System uptime
+>= 99%
+Uptime monitoring
+Leads contacted from DealHunter / month
+20+
+Status field tracking
+Pipeline value generated / quarter
+$500K+
+Manual tracking
+
+
+
+
+END OF REQUIREMENTS DOCUMENT
+
+For questions or clarifications, contact:
+Ujjwal Roy  |  CEO, ScaleBuild AI  |  ujjwal@scalebuild.ai

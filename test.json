@@ -1,0 +1,1076 @@
+{
+  "name": "DealHunter - Agentic AI Lead Generation",
+  "nodes": [
+    {
+      "id": "cron-trigger",
+      "name": "Cron - Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1300,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "init-config",
+      "name": "Initialize Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1080,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "subreddits",
+              "name": "subreddits",
+              "type": "array",
+              "value": "={{ [\n  { \"name\": \"forhire\",             \"flair\": \"Hiring\", \"priority\": \"critical\" },\n  { \"name\": \"startups\",            \"flair\": null,     \"priority\": \"critical\" },\n  { \"name\": \"SaaS\",                \"flair\": null,     \"priority\": \"high\" },\n  { \"name\": \"Entrepreneur\",        \"flair\": null,     \"priority\": \"high\" },\n  { \"name\": \"cofounder\",           \"flair\": null,     \"priority\": \"high\" },\n  { \"name\": \"ArtificialIntelligence\", \"flair\": null,  \"priority\": \"high\" }\n] }}"
+            },
+            {
+              "id": "keywords-skip",
+              "name": "keywordsSkip",
+              "type": "array",
+              "value": "={{ [\"[for hire]\", \"for hire]\", \"wordpress theme\", \"shopify theme\", \"logo design\", \"SEO services\", \"social media management\", \"content writing\", \"virtual assistant\", \"data entry\", \"graphic design\", \"video editing\", \"copywriting\", \"i am available\", \"available for hire\", \"seeking clients\", \"my portfolio\", \"i offer\", \"my services include\", \"hire me\", \"looking for work\", \"seeking employment\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "build-apify-input",
+      "name": "Build Apify Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -860,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const config = $input.first().json;\nconst subreddits = config.subreddits || [];\n\nconst startUrls = subreddits.map(s => ({\n  url: `https://www.reddit.com/r/${s.name}/new/?sort=new`,\n  userData: { subreddit: s.name, flair: s.flair, priority: s.priority }\n}));\n\nreturn [{ json: {\n  startUrls,\n  maxItems: 90,\n  keywordsSkip: config.keywordsSkip,\n  subreddits: config.subreddits\n}}];"
+      }
+    },
+    {
+      "id": "normalize-posts",
+      "name": "Normalize to RawOpportunity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -420,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const config = $('Build Apify Input').first().json;\nconst keywordsSkip = config.keywordsSkip || [];\nconst flairMap = {};\n(config.subreddits || []).forEach(s => {\n  if (s.flair) flairMap[s.name.toLowerCase()] = s.flair.toLowerCase();\n});\n\nconst rawItems = $input.all();\nconst results = [];\nconst seenIds = new Set();\n\nfor (const item of rawItems) {\n  if (item.json?.error || item.json?.type === 'run-failed') continue;\n  if (typeof item.json !== 'object' || item.json === null) continue;\n  const posts = Array.isArray(item.json) ? item.json : [item.json];\n\n  for (const post of posts) {\n    try {\n      if (!post || typeof post !== 'object') continue;\n      const postTitle = String(post.title || '').substring(0, 500);\n      if (!postTitle) continue;\n\n      const postId = String(post.parsedId || post.id || '');\n      if (seenIds.has(postId)) continue;\n      if (postId) seenIds.add(postId);\n\n      const postBody      = String(post.body || post.text || post.selfText || '');\n      const postFlair     = String(post.flair || post.linkFlair || post.link_flair_text || '');\n      const postUrl       = String(post.url || post.link || '');\n      const postSubreddit = String(post.communityName || post.subreddit || '');\n      const postAuthor    = typeof post.author === 'object' ? (post.author?.name || '') : String(post.author || '');\n      const postScore     = Number(post.score || post.upVotes || 0);\n      const postComments  = Number(post.numberOfComments || post.numComments || 0);\n      const postDate      = post.createdAt || post.publishedAt ||\n                            (post.created_utc ? new Date(post.created_utc * 1000).toISOString() : new Date().toISOString());\n\n      if (postBody === '[removed]' || postBody === '[deleted]') continue;\n\n      // Skip [For Hire] flair \u2014 individuals selling services\n      if (postFlair.toLowerCase() === 'for hire' || postTitle.toLowerCase().startsWith('[for hire]')) continue;\n\n      // Flair filter: forhire only keep [Hiring]\n      const requiredFlair = flairMap[postSubreddit.toLowerCase()];\n      if (requiredFlair && postFlair && !postFlair.toLowerCase().includes(requiredFlair)) continue;\n\n      // Skip noise keywords\n      const fullText = (postTitle + ' ' + postBody).toLowerCase();\n      if (keywordsSkip.some(kw => fullText.includes(kw.toLowerCase()))) continue;\n\n      results.push({ json: {\n        title:        postTitle,\n        description:  postBody.substring(0, 3000),\n        source:       'reddit_' + postSubreddit.toLowerCase(),\n        source_url:   postUrl || `https://reddit.com/r/${postSubreddit}`,\n        source_id:    postId,\n        posted_at:    postDate,\n        author:       postAuthor,\n        subreddit:    postSubreddit,\n        upvotes:      postScore,\n        num_comments: postComments,\n        flair_text:   postFlair\n      }});\n    } catch(e) {}\n  }\n}\nreturn results;"
+      }
+    },
+    {
+      "id": "gemini-score",
+      "name": "Gemini AI - Score Opportunity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + $env.GOOGLE_AI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  \"contents\": [{\"parts\": [{\"text\": `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, SaaS products, data pipelines.\n\nIDEAL LEAD: Founder/CTO/SMB owner with a business PROBLEM needing custom software. Pain point posts are HIGH VALUE \u2014 they don't need to say \"looking for developer\".\n\nGOOD LEAD EXAMPLES:\n- \"compliance audits take weeks\" \u2192 needs automation software \u2192 HIGH\n- \"we outgrew our no-code tool\" \u2192 needs custom dev \u2192 HIGH\n- \"evaluating dev shops after bad outsourcing\" \u2192 MEDIUM\n- \"I built a meme AI\" \u2192 joke \u2192 0.0\n- Individual [For Hire] ad \u2192 0.0\n\nPOST TO EVALUATE:\nTitle: ${$json.title}\nSource: r/${$json.subreddit}\nDescription: ${($json.description || '').substring(0, 2000)}\n\nSCORE 4 DIMENSIONS (0.0\u20131.0):\n1. relevance_score: Does this business need software/AI built?\n   0.9+=clear AI/automation/enterprise need | 0.7-0.8=business pain point | 0.5-0.6=startup needs tech help | 0.0-0.2=irrelevant/joke/individual ad\n\n2. budget_score: 1.0=$100K+ | 0.8=$50-100K | 0.6=$25-50K | 0.4=$10-25K | 0.2=<$10K | 0.5=unknown but substantial scope\n\n3. urgency_score: 1.0=this week | 0.7=1 month | 0.4=3 months | 0.2=no timeline\n\n4. win_probability: 0.8+=agency/partner sought | 0.5-0.7=good fit vague | 0.2-0.4=wants freelancer | 0.0-0.1=no fit\n\nFormula: relevance*0.35 + budget*0.25 + urgency*0.15 + win_probability*0.25\n\nReturn ONLY valid JSON (no markdown):\n{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"overall_score\":0.0,\"summary\":\"2-3 sentence summary\",\"industry\":\"FinTech/HealthTech/SaaS/Manufacturing/eCommerce/General\",\"tags\":[\"tag1\"],\"reasoning\":\"brief explanation\",\"estimated_budget_text\":null,\"deadline_text\":null,\"location\":null,\"tech_stack\":[],\"company_name\":null,\"contact_info\":null}`}]}],\n  \"generationConfig\": {\"maxOutputTokens\": 1000, \"temperature\": 0.2}\n}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "parse-scores",
+      "name": "Parse & Merge AI Scores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const geminiItems  = $input.all();\nconst originalPosts = $('Normalize to RawOpportunity').all();\nconst results = [];\n\nfor (let i = 0; i < geminiItems.length; i++) {\n  const geminiResp = geminiItems[i].json;\n  const post = (originalPosts[i] || originalPosts[0]).json;\n\n  let s = {};\n  try {\n    const raw = geminiResp.candidates?.[0]?.content?.parts?.[0]?.text || '';\n    const cleaned = raw.replace(/```json|```/g, '').trim();\n    const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n    s = match ? JSON.parse(match[0]) : {};\n    if (!s.relevance_score && s.relevance_score !== 0) throw new Error('empty');\n  } catch(e) {\n    s = { relevance_score:0.1, budget_score:0.1, urgency_score:0.1, win_probability:0.1,\n          summary:'Parse error: '+e.message, industry:'Unknown', tags:[], reasoning:e.message,\n          estimated_budget_text:null, deadline_text:null, location:null, tech_stack:[],\n          company_name:null, contact_info:null };\n  }\n\n  const overall = Math.round((\n    (s.relevance_score||0)*0.35 + (s.budget_score||0)*0.25 +\n    (s.urgency_score||0)*0.15   + (s.win_probability||0)*0.25\n  ) * 100) / 100;\n\n  let alertTier = 'discard';\n  if (overall >= 0.85) alertTier = 'instant';\n  else if (overall >= 0.70) alertTier = 'digest';\n  else if (overall >= 0.30) alertTier = 'dashboard';\n\n  results.push({ json: {\n    title:                 post.title,\n    description:           post.description,\n    source:                post.source,\n    source_url:            post.source_url,\n    source_id:             post.source_id,\n    posted_at:             post.posted_at,\n    author:                post.author,\n    subreddit:             post.subreddit,\n    upvotes:               post.upvotes,\n    num_comments:          post.num_comments,\n    relevance_score:       s.relevance_score,\n    budget_score:          s.budget_score,\n    urgency_score:         s.urgency_score,\n    win_probability:       s.win_probability,\n    overall_score:         overall,\n    ai_summary:            s.summary,\n    industry:              s.industry,\n    ai_tags:               s.tags || [],\n    ai_reasoning:          s.reasoning,\n    estimated_budget_text: s.estimated_budget_text,\n    deadline_text:         s.deadline_text,\n    location:              s.location,\n    tech_stack:            s.tech_stack || [],\n    company_name:          s.company_name,\n    contact_info:          s.contact_info,\n    alert_tier:            alertTier,\n    discovered_at:         new Date().toISOString(),\n    status:                'new',\n    outreach_draft:        ''\n  }});\n}\nreturn results;"
+      }
+    },
+    {
+      "id": "filter-score",
+      "name": "Filter - Score >= 0.30",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "score-check",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0.3
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "append-to-sheet",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Opportunities"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Source ID": "={{ $json.source_id }}",
+            "Title": "={{ $json.title }}",
+            "Subreddit": "={{ $json.subreddit }}",
+            "Source URL": "={{ $json.source_url }}",
+            "Posted At": "={{ $json.posted_at }}",
+            "Discovered At": "={{ $json.discovered_at }}",
+            "Author": "={{ $json.author }}",
+            "Overall Score": "={{ $json.overall_score }}",
+            "Relevance Score": "={{ $json.relevance_score }}",
+            "Budget Score": "={{ $json.budget_score }}",
+            "Urgency Score": "={{ $json.urgency_score }}",
+            "Win Probability": "={{ $json.win_probability }}",
+            "Alert Tier": "={{ $json.alert_tier }}",
+            "Industry": "={{ $json.industry }}",
+            "AI Summary": "={{ $json.ai_summary }}",
+            "AI Tags": "={{ ($json.ai_tags || []).join(', ') }}",
+            "Tech Stack": "={{ ($json.tech_stack || []).join(', ') }}",
+            "Budget Mentioned": "={{ $json.estimated_budget_text }}",
+            "Deadline": "={{ $json.deadline_text }}",
+            "Location": "={{ $json.location }}",
+            "Upvotes": "={{ $json.upvotes }}",
+            "Comments": "={{ $json.num_comments }}",
+            "Status": "new",
+            "AI Reasoning": "={{ $json.ai_reasoning }}",
+            "Outreach Draft": ""
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "loop-items",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        700,
+        0
+      ],
+      "parameters": {
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "wait-loop",
+      "name": "Wait - Process Rate Limit",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        920,
+        0
+      ],
+      "parameters": {
+        "amount": 2
+      }
+    },
+    {
+      "id": "check-alert",
+      "name": "Check - Score >= 0.85 (Instant Alert)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1140,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "alert-check",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0.85
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "gemini-outreach",
+      "name": "Gemini - Generate Outreach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        -160
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + $env.GOOGLE_AI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  \"contents\": [{\"parts\": [{\"text\": `You are writing as Ujjwal Roy, CEO of ScaleBuild AI (Junkiri Labs LLC).\n\nLEAD:\nTitle: ${$json.title}\nSummary: ${$json.ai_summary}\nIndustry: ${$json.industry}\nTech Stack: ${($json.tech_stack||[]).join(', ')||'Not specified'}\nBudget: ${$json.estimated_budget_text||'Not mentioned'}\nSource: r/${$json.subreddit}\n\nRULES:\n- Write as Ujjwal Roy, CEO of ScaleBuild AI\n- Tone: direct, confident, no fluff, human-sounding, NO em dashes, NO exclamation marks\n- Max 180 words\n- Structure: Hook (reference their specific need) \u2192 Credentials (Intel/IBM/Micron + AI/CV capabilities) \u2192 Soft 15-min CTA\n- NO generic openers like \"I hope this finds you well\"\n- Sign off exactly:\nUjjwal Roy\nCEO, ScaleBuild AI\nujjwal@scalebuild.ai\n\nReturn ONLY the email body. No subject line. No markdown.`}]}],\n  \"generationConfig\": {\"maxOutputTokens\": 600, \"temperature\": 0.6}\n}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "parse-outreach",
+      "name": "Parse Outreach Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        -160
+      ],
+      "parameters": {
+        "jsCode": "const geminiResp = $input.first().json;\nconst original   = $('Check - Score >= 0.85 (Instant Alert)').item.json;\n\nconst draft = geminiResp.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'Outreach generation failed';\n\nreturn [{ json: { ...original, outreach_draft: draft } }];"
+      }
+    },
+    {
+      "id": "slack-instant",
+      "name": "Slack - Instant Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1800,
+        -260
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#dealhunter-alerts",
+          "mode": "name"
+        },
+        "text": "=\ud83d\udea8 *HIGH-VALUE LEAD* (Score: {{ $json.overall_score }})\n\n*{{ $json.title }}*\nr/{{ $json.subreddit }} | Industry: {{ $json.industry }}\n\n*AI Summary:*\n{{ $json.ai_summary }}\n\n\ud83d\udcca Relevance: {{ $json.relevance_score }} | Budget: {{ $json.budget_score }} | Win Prob: {{ $json.win_probability }}\n\ud83d\udcb0 Budget: {{ $json.estimated_budget_text || 'Not mentioned' }}\n\n<{{ $json.source_url }}|View Post>",
+        "otherOptions": {}
+      }
+    },
+    {
+      "id": "email-instant",
+      "name": "Email - Instant Alert (SendGrid)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1800,
+        -80
+      ],
+      "parameters": {
+        "fromEmail": "deshpane834@gmail.com",
+        "toEmail": "deshpane834@gmail.com",
+        "subject": "=\ud83d\udea8 DealHunter [{{ $json.overall_score }}] - {{ $json.title.substring(0,60) }}",
+        "emailType": "html",
+        "message": "=<h2>\ud83d\udea8 High-Value Lead Detected</h2><p><strong>{{ $json.title }}</strong></p><p>Source: r/{{ $json.subreddit }} | Score: {{ $json.overall_score }} | Industry: {{ $json.industry }}</p><h3>AI Summary</h3><p>{{ $json.ai_summary }}</p><h3>Scoring</h3><ul><li>Relevance: {{ $json.relevance_score }}</li><li>Budget: {{ $json.budget_score }}</li><li>Urgency: {{ $json.urgency_score }}</li><li>Win Probability: {{ $json.win_probability }}</li></ul><p>Budget: {{ $json.estimated_budget_text || 'Not mentioned' }}</p><h3>Outreach Draft</h3><pre>{{ $json.outreach_draft }}</pre><p><a href='{{ $json.source_url }}'>View Original Post</a></p>",
+        "options": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "update-sheet-outreach",
+      "name": "Update Sheet - Add Outreach Draft",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1800,
+        100
+      ],
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Opportunities"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Source ID": "={{ $json.source_id }}",
+            "Outreach Draft": "={{ $json.outreach_draft }}",
+            "Status": "outreach_ready"
+          },
+          "matchingColumns": [
+            "Source ID"
+          ],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "slack-digest",
+      "name": "Slack - Digest Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        160
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#dealhunter-digest",
+          "mode": "name"
+        },
+        "text": "=\ud83d\udccb *New Lead Added* (Score: {{ $json.overall_score }})\n*{{ $json.title }}*\nr/{{ $json.subreddit }} | {{ $json.industry }}\n{{ $json.ai_summary }}\n<{{ $json.source_url }}|View Post>",
+        "otherOptions": {}
+      }
+    },
+    {
+      "id": "daily-cron",
+      "name": "Cron - Daily Digest 8AM ET",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1300,
+        480
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 13 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fetch-digest-leads",
+      "name": "Fetch Last 24h Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -1080,
+        480
+      ],
+      "parameters": {
+        "operation": "getAll",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Opportunities"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "build-digest",
+      "name": "Build Daily Digest Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -860,
+        480
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst now = new Date();\nconst yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);\n\nconst leads = items\n  .filter(item => {\n    const discovered = new Date(item.json['Discovered At'] || item.json.discovered_at || 0);\n    const score = parseFloat(item.json['Overall Score'] || item.json.overall_score) || 0;\n    return discovered >= yesterday && score >= 0.70;\n  })\n  .sort((a, b) => {\n    const sa = parseFloat(a.json['Overall Score'] || a.json.overall_score) || 0;\n    const sb = parseFloat(b.json['Overall Score'] || b.json.overall_score) || 0;\n    return sb - sa;\n  })\n  .slice(0, 15);\n\nif (leads.length === 0) {\n  return [{ json: { count: 0, emailBody: '<p>No leads scored >= 0.70 in the last 24 hours.</p>', hasLeads: false } }];\n}\n\nconst rows = leads.map((item, idx) => {\n  const d = item.json;\n  const score = parseFloat(d['Overall Score'] || d.overall_score) || 0;\n  const title = d['Title'] || d.title || '';\n  const url   = d['Source URL'] || d.source_url || '';\n  const sub   = d['Subreddit'] || d.subreddit || '';\n  const summ  = d['AI Summary'] || d.ai_summary || '';\n  return `<tr><td>${idx+1}</td><td><a href=\"${url}\">${title}</a></td><td>r/${sub}</td><td><strong>${score.toFixed(2)}</strong></td><td>${summ.substring(0,120)}...</td></tr>`;\n}).join('');\n\nconst emailBody = `<h2>\ud83d\udcca DealHunter Daily Digest</h2>\n<p><strong>${leads.length} leads</strong> scored \u2265 0.70 in the last 24 hours</p>\n<table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%\">\n<tr><th>#</th><th>Title</th><th>Source</th><th>Score</th><th>Summary</th></tr>\n${rows}\n</table>\n<p><em>Generated ${now.toISOString()}</em></p>`;\n\nreturn [{ json: { count: leads.length, emailBody, hasLeads: true } }];"
+      }
+    },
+    {
+      "id": "check-digest-leads",
+      "name": "Check - Has Leads Today",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -640,
+        480
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has-leads",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "leftValue": "={{ $json.hasLeads }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "send-digest",
+      "name": "Send Daily Digest Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -420,
+        480
+      ],
+      "parameters": {
+        "fromEmail": "deshpane834@gmail.com",
+        "toEmail": "deshpane834@gmail.com",
+        "subject": "=\ud83d\udcca DealHunter Daily Digest - {{ $json.count }} New Leads",
+        "emailType": "html",
+        "message": "={{ $json.emailBody }}",
+        "options": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "whatsapp-digest",
+      "name": "WhatsApp - Send Daily Digest",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        480
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "={{ $env.WHATSAPP_RECIPIENT_NUMBER }}",
+        "textBody": "=📊 *DealHunter Daily Digest*\n\n{{ $json.count }} leads scored ≥ 0.70 in the last 24 hours.\n\nCheck your email (deshpane834@gmail.com) for the full report.\n\n_Generated: {{ new Date().toISOString() }}_"
+      },
+      "credentials": {
+        "whatsAppApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp API"
+        }
+      }
+    },
+    {
+      "id": "apify-start-run",
+      "name": "Apify - Start Run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -640,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.apify.com/v2/acts/trudax~reddit-scraper-lite/runs?token=' + $env.APIFY_API_TOKEN + '&memory=256' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  \"startUrls\": $json.startUrls,\n  \"maxItems\": $json.maxItems,\n  \"proxy\": {\"useApifyProxy\": true},\n  \"includeComments\": false,\n  \"sort\": \"new\"\n}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "apify-wait-poll",
+      "name": "Wait - Apify Poll (20s)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -640,
+        0
+      ],
+      "parameters": {
+        "amount": 20
+      }
+    },
+    {
+      "id": "apify-check-status",
+      "name": "Apify - Check Run Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.apify.com/v2/actor-runs/' + $json.runId + '?token=' + $env.APIFY_API_TOKEN }}",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "apify-run-done",
+      "name": "Run Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        20,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "status-check",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              },
+              "leftValue": "={{ $json.data.status }}",
+              "rightValue": "ING"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "apify-fetch-results",
+      "name": "Apify - Fetch Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.apify.com/v2/datasets/' + $json.data.defaultDatasetId + '/items?token=' + $env.APIFY_API_TOKEN + '&limit=100&clean=true' }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "store-run-id",
+      "name": "Store Run ID",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -420,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "run-id",
+              "name": "runId",
+              "type": "string",
+              "value": "={{ $json.data.id }}"
+            },
+            {
+              "id": "dataset-id",
+              "name": "datasetId",
+              "type": "string",
+              "value": "={{ $json.data.defaultDatasetId }}"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "type": "string",
+              "value": "={{ $json.data.status }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "keep-run-id",
+      "name": "Keep Run ID",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        20,
+        160
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "keep-runid",
+              "name": "runId",
+              "type": "string",
+              "value": "={{ $json.data?.id || $json.runId }}"
+            },
+            {
+              "id": "keep-dataset",
+              "name": "datasetId",
+              "type": "string",
+              "value": "={{ $json.data?.defaultDatasetId || $json.datasetId }}"
+            },
+            {
+              "id": "keep-status",
+              "name": "status",
+              "type": "string",
+              "value": "={{ $json.data?.status || $json.status }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Cron - Every 30 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Initialize Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Config": {
+      "main": [
+        [
+          {
+            "node": "Build Apify Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Apify Input": {
+      "main": [
+        [
+          {
+            "node": "Apify - Start Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize to RawOpportunity": {
+      "main": [
+        [
+          {
+            "node": "Gemini AI - Score Opportunity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini AI - Score Opportunity": {
+      "main": [
+        [
+          {
+            "node": "Parse & Merge AI Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Merge AI Scores": {
+      "main": [
+        [
+          {
+            "node": "Filter - Score >= 0.30",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter - Score >= 0.30": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Wait - Process Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait - Process Rate Limit": {
+      "main": [
+        [
+          {
+            "node": "Check - Score >= 0.85 (Instant Alert)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Score >= 0.85 (Instant Alert)": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Generate Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack - Digest Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Generate Outreach": {
+      "main": [
+        [
+          {
+            "node": "Parse Outreach Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Outreach Draft": {
+      "main": [
+        [
+          {
+            "node": "Slack - Instant Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email - Instant Alert (SendGrid)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Sheet - Add Outreach Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - Instant Alert": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email - Instant Alert (SendGrid)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Sheet - Add Outreach Draft": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - Digest Notification": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron - Daily Digest 8AM ET": {
+      "main": [
+        [
+          {
+            "node": "Fetch Last 24h Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Last 24h Leads": {
+      "main": [
+        [
+          {
+            "node": "Build Daily Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Daily Digest Email": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Leads Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Leads Today": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Daily Digest Email": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp - Send Daily Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify - Start Run": {
+      "main": [
+        [
+          {
+            "node": "Store Run ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait - Apify Poll (20s)": {
+      "main": [
+        [
+          {
+            "node": "Apify - Check Run Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify - Check Run Status": {
+      "main": [
+        [
+          {
+            "node": "Run Complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Complete?": {
+      "main": [
+        [
+          {
+            "node": "Apify - Fetch Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Keep Run ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify - Fetch Results": {
+      "main": [
+        [
+          {
+            "node": "Normalize to RawOpportunity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Run ID": {
+      "main": [
+        [
+          {
+            "node": "Wait - Apify Poll (20s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Run ID": {
+      "main": [
+        [
+          {
+            "node": "Wait - Apify Poll (20s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "versionId": "03a14b02-8791-4a4d-b00a-e028ff0e6055",
+  "meta": {
+    "instanceId": "dealhunter-v2"
+  },
+  "id": "dealhunter-v2"
+}
