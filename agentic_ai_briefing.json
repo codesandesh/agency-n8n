@@ -819,6 +819,30 @@
         160
       ],
       "disabled": false
+    },
+    {
+      "parameters": {
+        "sendTo": "deshpane834@gmail.com",
+        "subject": "=Hyperscaler Post Published: {{ $json.FINAL_SUMMARY.title }}",
+        "message": "=<h2>Hyperscaler MAN \u2014 Post Published</h2><p><b>Title:</b> {{ $json.FINAL_SUMMARY.title }}</p><p><b>Brand:</b> {{ $json.FINAL_SUMMARY.brand }}</p><p><b>Status:</b> {{ $json.FINAL_SUMMARY.status }}</p><p>Your automated workflow has successfully published a new post to Facebook.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "node-gmail-notify",
+      "name": "Send Gmail Notification",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        4980,
+        160
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-oauth2",
+          "name": "Gmail account (deshpane834@gmail.com)"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -1097,7 +1121,7 @@
       "main": [
         [
           {
-            "node": "Mark as Posted",
+            "node": "Send Gmail Notification",
             "type": "main",
             "index": 0
           }
@@ -1109,6 +1133,17 @@
         [
           {
             "node": "Final Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Gmail Notification": {
+      "main": [
+        [
+          {
+            "node": "Mark as Posted",
             "type": "main",
             "index": 0
           }
