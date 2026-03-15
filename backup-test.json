@@ -1,0 +1,1819 @@
+{
+    "name": "DealHunter Pro - Merged AI Lead Generation",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "hours",
+                            "hoursInterval": 2
+                        }
+                    ]
+                }
+            },
+            "id": "cron-trigger",
+            "name": "Cron - Every 2 Hours",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                -1600,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "options": {},
+                "sheetName": {
+                    "__rl": true,
+                    "mode": "list",
+                    "value": "gid=0",
+                    "cachedResultName": "Sheet1"
+                },
+                "documentId": {
+                    "__rl": true,
+                    "mode": "list",
+                    "value": "1pmoW6LBeR1E23qfObMf_ce8pOpohP0qmftU9N7Vuq6o",
+                    "cachedResultName": "Enhanced Business Profile"
+                }
+            },
+            "id": "get-business-profile",
+            "name": "Get Business Profile",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.6,
+            "position": [
+                -1360,
+                0
+            ],
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "HopOeXjaGgSku8RO",
+                    "name": "Google Sheets account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-2.0-flash",
+                "options": {}
+            },
+            "id": "gemini-subreddit-model",
+            "name": "Gemini - Subreddit Selector Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                -1200,
+                200
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "credential-id",
+                    "name": "googlePalmApi Credential"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsonSchemaExample": "{\n  \"subreddits\": [\"entrepreneur\",\"startups\",\"SaaS\",\"smallbusiness\",\"cofounder\"],\n  \"reasoning\": \"Selected based on target audience alignment\"\n}"
+            },
+            "id": "subreddit-parser",
+            "name": "Subreddit Output Parser",
+            "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+            "typeVersion": 1.3,
+            "position": [
+                -1000,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "text": "=You are a Reddit lead generation strategist for ScaleBuild AI.\n\nAnalyze the business profile and identify the 5 best subreddits (return names WITHOUT r/ prefix).\n\nBusiness Profile:\n- Profession: {{ $json.profession }}\n- Industry: {{ $json.industry }}\n- Primary Services: {{ $json.primary_services }}\n- Target Client: {{ $json['target_client_profile '] }}\n- Pain Points: {{ $json.pain_points }}\n\nReturn ONLY subreddits where founders/CTOs/business owners actively seek help. Avoid hobbyist or purely promotional communities.\n\nAlways include at minimum: forhire, startups — then add 3 more based on the business profile.",
+                "batching": {},
+                "promptType": "define",
+                "hasOutputParser": true
+            },
+            "id": "subreddit-selector",
+            "name": "AI Subreddit Selector",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.7,
+            "position": [
+                -1120,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const profile = $('Get Business Profile').first().json;\nconst subreddits = $input.first().json.output?.subreddits || ['forhire','startups','SaaS','Entrepreneur','cofounder','smallbusiness','nocode','webdev'];\n\n// Build Apify startUrls from AI-selected subreddits\nconst startUrls = subreddits.map(name => ({\n  url: `https://www.reddit.com/r/${name}/new/?sort=new`,\n  userData: { subreddit: name, priority: 'high' }\n}));\n\nconst keywordsSkip = [\n  '[for hire]','for hire]','wordpress theme','shopify theme','logo design',\n  'SEO services','social media management','content writing','virtual assistant',\n  'data entry','graphic design','video editing','copywriting','i am available',\n  'available for hire','seeking clients','my portfolio','i offer',\n  'my services include','hire me','looking for work','seeking employment'\n];\n\nreturn [{ json: {\n  startUrls,\n  maxItems: 20,\n  keywordsSkip,\n  subreddits: subreddits.map(name => ({ name, flair: name === 'forhire' ? 'Hiring' : null, priority: 'high' })),\n  businessProfile: profile\n}}];"
+            },
+            "id": "build-apify-input",
+            "name": "Build Apify Input",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -800,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ 'https://api.apify.com/v2/acts/trudax~reddit-scraper-lite/runs?token=' + $env.APIFY_API_TOKEN + '&memory=256' }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({\n  \"startUrls\": $json.startUrls,\n  \"maxItems\": $json.maxItems,\n  \"proxy\": {\"useApifyProxy\": true},\n  \"includeComments\": false,\n  \"sort\": \"new\"\n}) }}",
+                "options": {
+                    "timeout": 30000
+                }
+            },
+            "id": "apify-start-run",
+            "name": "Apify - Start Run",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                -560,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "run-id",
+                            "name": "runId",
+                            "type": "string",
+                            "value": "={{ $json.data.id }}"
+                        },
+                        {
+                            "id": "dataset-id",
+                            "name": "datasetId",
+                            "type": "string",
+                            "value": "={{ $json.data.defaultDatasetId }}"
+                        },
+                        {
+                            "id": "status",
+                            "name": "status",
+                            "type": "string",
+                            "value": "={{ $json.data.status }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "store-run-id",
+            "name": "Store Run ID",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                -336,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "amount": 20
+            },
+            "id": "apify-wait-poll",
+            "name": "Wait - Apify Poll (20s)",
+            "type": "n8n-nodes-base.wait",
+            "typeVersion": 1.1,
+            "position": [
+                -560,
+                -240
+            ],
+            "webhookId": "057bd95f-2189-4374-bc3d-1123f72db2f6"
+        },
+        {
+            "parameters": {
+                "url": "={{ 'https://api.apify.com/v2/actor-runs/' + $json.runId + '?token=' + $env.APIFY_API_TOKEN }}",
+                "options": {
+                    "timeout": 15000
+                }
+            },
+            "id": "apify-check-status",
+            "name": "Apify - Check Run Status",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                -336,
+                -240
+            ]
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "keep-runid",
+                            "name": "runId",
+                            "type": "string",
+                            "value": "={{ $json.data?.id || $json.runId }}"
+                        },
+                        {
+                            "id": "keep-dataset",
+                            "name": "datasetId",
+                            "type": "string",
+                            "value": "={{ $json.data?.defaultDatasetId || $json.datasetId }}"
+                        },
+                        {
+                            "id": "keep-status",
+                            "name": "status",
+                            "type": "string",
+                            "value": "={{ $json.data?.status || $json.status }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "keep-run-id",
+            "name": "Keep Run ID",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                -112,
+                -240
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2,
+                        "leftValue": "",
+                        "caseSensitive": true,
+                        "typeValidation": "strict"
+                    },
+                    "combinator": "and",
+                    "conditions": [
+                        {
+                            "id": "status-check",
+                            "operator": {
+                                "type": "string",
+                                "operation": "notContains"
+                            },
+                            "leftValue": "={{ $json.data.status }}",
+                            "rightValue": "ING"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "apify-run-done",
+            "name": "Run Complete?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                -112,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{ 'https://api.apify.com/v2/datasets/' + $json.data.defaultDatasetId + '/items?token=' + $env.APIFY_API_TOKEN + '&limit=100&clean=true' }}",
+                "options": {
+                    "timeout": 30000
+                }
+            },
+            "id": "apify-fetch-results",
+            "name": "Apify - Fetch Results",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                144,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Fetch HN stories + merge with Reddit results\nconst businessProfile = $('Build Apify Input').first().json.businessProfile || {};\nconst profession = businessProfile.profession || 'AI/ML software development';\nconst services = businessProfile.primary_services || 'custom software, AI automation';\n\n// Build HN queries from business profile dynamically\nconst hnQueries = [\n  `${profession} developer hiring`,\n  'AI automation custom software build',\n  'SaaS enterprise automation engineer',\n  'machine learning custom software',\n];\n\n// 2-hour window to match cron interval\nconst since = Math.floor((Date.now() - 2 * 3600 * 1000) / 1000);\n\nconst withTimeout = (promise, ms) =>\n  Promise.race([\n    promise,\n    new Promise((_, reject) => setTimeout(() => reject(new Error('HN timeout')), ms)),\n  ]);\n\nconst hnResults = await Promise.allSettled(\n  hnQueries.map(q =>\n    withTimeout(\n      this.helpers.httpRequest({\n        method: 'GET',\n        url: `https://hn.algolia.com/api/v1/search_by_date?query=${encodeURIComponent(q)}&tags=story&hitsPerPage=30&numericFilters=created_at_i>${since}`,\n      }),\n      8000\n    )\n  )\n);\n\nconst seenHN = new Set();\nconst hnRaw = [];\nfor (const result of hnResults) {\n  if (result.status !== 'fulfilled') continue;\n  for (const hit of (result.value.hits || [])) {\n    if (!hit.title || seenHN.has(hit.objectID)) continue;\n    seenHN.add(hit.objectID);\n    const storyText = (hit.story_text || '').replace(/<[^>]*>/g, '').trim();\n    const description = storyText ? storyText.substring(0, 3000) : (hit.url ? `External link: ${hit.url}` : '');\n    hnRaw.push({ ...hit, _source: 'hackernews', _hn_description: description });\n  }\n}\n\nconst redditRaw = $input.all().map(i => ({ ...i.json, _source: 'reddit' }));\nconst allRaw = [...redditRaw, ...hnRaw];\n\nif (allRaw.length === 0) {\n  return [{ json: { _noData: true, title: 'NO DATA', description: '', source: 'none', source_url: '', source_id: 'empty_run_' + Date.now(), posted_at: new Date().toISOString(), author: '', subreddit: '', upvotes: 0, num_comments: 0, flair_text: '', budget_text: '' } }];\n}\n\nreturn allRaw.map(item => ({ json: item }));"
+            },
+            "id": "combine-all-fetch-hn",
+            "name": "Combine All & Fetch HN",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                400,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const config = $('Build Apify Input').first().json;\nconst keywordsSkip = config.keywordsSkip || [];\nconst subreddits = config.subreddits || [];\nconst flairMap = {};\nsubreddits.forEach(s => {\n  if (s.flair) flairMap[s.name.toLowerCase()] = s.flair.toLowerCase();\n});\n\nconst rawItems = $input.all();\nconst results = [];\n\n// Persistent dedup across runs — 7-day TTL\nconst staticData = $getWorkflowStaticData('global');\nconst sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;\nconst seenIdsMap = Object.fromEntries(\n  Object.entries(staticData.seenIds || {}).filter(([, ts]) => ts > sevenDaysAgo)\n);\nconst newIds = {};\n\nfor (const item of rawItems) {\n  if (!item.json || typeof item.json !== 'object') continue;\n  const post = item.json;\n  const src = post._source || 'reddit';\n\n  try {\n    if (post._noData) continue;\n\n    if (src === 'hackernews') {\n      const title = String(post.title || '').substring(0, 500);\n      if (!title) continue;\n      const id = 'hn_' + String(post.objectID || '');\n      if (seenIdsMap[id] || newIds[id]) continue;\n      newIds[id] = Date.now();\n      const body = String(post._hn_description || post.story_text || '').replace(/<[^>]*>/g, '').substring(0, 3000);\n      results.push({ json: {\n        title, description: body,\n        source: 'hackernews',\n        source_url: post.url || `https://news.ycombinator.com/item?id=${post.objectID}`,\n        source_id: id,\n        posted_at: post.created_at || new Date().toISOString(),\n        author: String(post.author || ''),\n        subreddit: '',\n        upvotes: Number(post.points || 0),\n        num_comments: Number(post.num_comments || 0),\n        flair_text: '', budget_text: '',\n      }});\n      continue;\n    }\n\n    if (post.error || post.type === 'run-failed') continue;\n    const posts = Array.isArray(post) ? post : [post];\n    for (const p of posts) {\n      if (!p || typeof p !== 'object') continue;\n      const postTitle = String(p.title || '').substring(0, 500);\n      if (!postTitle) continue;\n      const postId = 'reddit_' + String(p.parsedId || p.id || '');\n      if (seenIdsMap[postId] || newIds[postId]) continue;\n      newIds[postId] = Date.now();\n      const postBody = String(p.body || p.text || p.selfText || '');\n      const postFlair = String(p.flair || p.linkFlair || p.link_flair_text || '');\n      const postUrl = String(p.url || p.link || '');\n      const postSubreddit = String(p.communityName || p.subreddit || '');\n      const postAuthor = typeof p.author === 'object' ? (p.author?.name || '') : String(p.author || '');\n      const postScore = Number(p.score || p.upVotes || 0);\n      const postComments = Number(p.numberOfComments || p.numComments || 0);\n      const postDate = p.createdAt || p.publishedAt || (p.created_utc ? new Date(p.created_utc * 1000).toISOString() : new Date().toISOString());\n      if (p.dataType === 'comment' || p.postId || p.parentId) continue;\n      if (postBody === '[removed]' || postBody === '[deleted]') continue;\n      if (postFlair.toLowerCase() === 'for hire' || postTitle.toLowerCase().startsWith('[for hire]')) continue;\n      const requiredFlair = flairMap[postSubreddit.toLowerCase()];\n      if (requiredFlair && postFlair && !postFlair.toLowerCase().includes(requiredFlair)) continue;\n      const fullText = (postTitle + ' ' + postBody).toLowerCase();\n      if (keywordsSkip.some(kw => fullText.includes(kw.toLowerCase()))) continue;\n      results.push({ json: {\n        title: postTitle,\n        description: postBody.substring(0, 3000),\n        source: 'reddit_' + postSubreddit.toLowerCase(),\n        source_url: postUrl || `https://reddit.com/r/${postSubreddit}`,\n        source_id: postId,\n        posted_at: postDate,\n        author: postAuthor,\n        subreddit: postSubreddit,\n        upvotes: postScore,\n        num_comments: postComments,\n        flair_text: postFlair,\n        budget_text: '',\n      }});\n    }\n  } catch(e) {\n    console.error('[Normalize] Failed:', e.message);\n  }\n}\n\n// Save seen IDs immediately\nstaticData.seenIds = { ...seenIdsMap, ...newIds };\n\nif (results.length === 0) return [];\nreturn results;"
+            },
+            "id": "normalize-posts",
+            "name": "Normalize to RawOpportunity",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                640,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const posts = $input.all().map(i => i.json).filter(p => p && p.title && !p._noData);\nif (posts.length === 0) return [];\n\nconst apiKey = $env.GOOGLE_AI_API_KEY;\nconst BATCH_SIZE = 5;\nconst BETWEEN_BATCH_DELAY_MS = 1500;\nconst MAX_RETRIES = 2;\nconst CALL_TIMEOUT_MS = 120000;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, SaaS products, data pipelines.\n\nIDEAL LEAD: Founder/CTO/SMB owner with a business PROBLEM needing custom software. Pain point posts are HIGH VALUE.\n\nGOOD LEAD EXAMPLES:\n- \"compliance audits take weeks\" → needs automation → HIGH\n- \"we outgrew our no-code tool\" → needs custom dev → HIGH\n- \"evaluating dev shops\" → MEDIUM\n- \"I built a meme AI\" → 0.0\n- Individual [For Hire] ad → 0.0\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 0.9+=clear AI/automation need | 0.7-0.8=business pain point | 0.5-0.6=startup needs tech help | 0.0-0.2=irrelevant\n2. budget_score: 1.0=$100K+ | 0.8=$50-100K | 0.6=$25-50K | 0.4=$10-25K | 0.2=<$10K | 0.5=unknown substantial\n3. urgency_score: 1.0=this week | 0.7=1 month | 0.4=3 months | 0.2=no timeline\n4. win_probability: 0.8+=agency sought | 0.5-0.7=good fit | 0.2-0.4=wants freelancer | 0.0=no fit\n\nCOMPANY EXTRACTION:\n- Scan title AND description for company name, product name, website URL\n- Any URL becomes lead_website (domain only)\n- No name found? Return null. Never invent names.\n- lead_founder_name: use person name in post or Reddit username`;\n\nconst callGeminiWithRetry = async (prompt) => {\n  const body = {\n    contents: [{ parts: [{ text: prompt }] }],\n    generationConfig: { maxOutputTokens: 10000, temperature: 0.2, responseMimeType: 'application/json' },\n  };\n  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {\n    try {\n      const result = await Promise.race([\n        this.helpers.httpRequest({\n          method: 'POST',\n          url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n          body,\n        }),\n        new Promise((_, reject) => setTimeout(() => reject(new Error('call_timeout')), CALL_TIMEOUT_MS)),\n      ]);\n      return result;\n    } catch(e) {\n      const msg = String(e.message || '');\n      if (msg === 'call_timeout') throw new Error('call_timeout');\n      if (msg.includes('429') && attempt < MAX_RETRIES - 1) {\n        await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 2000));\n        continue;\n      }\n      throw e;\n    }\n  }\n};\n\nfunction computeScores(s) {\n  const overall = Math.round((\n    (s.relevance_score||0)*0.35 + (s.budget_score||0)*0.25 +\n    (s.urgency_score||0)*0.15 + (s.win_probability||0)*0.25\n  ) * 100) / 100;\n  let alert_tier = 'discard';\n  if (overall >= 0.85) alert_tier = 'instant';\n  else if (overall >= 0.70) alert_tier = 'digest';\n  else if (overall >= 0.30) alert_tier = 'dashboard';\n  return { ...s, overall_score: overall, alert_tier };\n}\n\nfunction fallback(reason) {\n  return computeScores({ relevance_score:0.1,budget_score:0.1,urgency_score:0.1,win_probability:0.1,\n    summary:'Parse error: '+reason,industry:'Unknown',tags:[],reasoning:reason,\n    estimated_budget_text:null,deadline_text:null,location:null,tech_stack:[],\n    company_name:null,contact_info:null,lead_founder_name:null,lead_website:null,reddit_author:null });\n}\n\nfunction buildItem(post, s) {\n  return { json: {\n    title: post.title,\n    description: post.description,\n    source: post.source,\n    source_url: post.source_url,\n    source_id: post.source_id,\n    posted_at: post.posted_at,\n    author: post.author,\n    subreddit: post.subreddit,\n    upvotes: post.upvotes,\n    num_comments: post.num_comments,\n    relevance_score: s.relevance_score,\n    budget_score: s.budget_score,\n    urgency_score: s.urgency_score,\n    win_probability: s.win_probability,\n    overall_score: s.overall_score,\n    ai_summary: s.summary,\n    industry: s.industry,\n    ai_tags: s.tags || [],\n    ai_reasoning: s.reasoning,\n    estimated_budget_text: s.estimated_budget_text,\n    deadline_text: s.deadline_text,\n    location: s.location,\n    tech_stack: s.tech_stack || [],\n    company_name: s.company_name,\n    contact_info: s.contact_info,\n    lead_founder: s.lead_founder_name || post.lead_founder || null,\n    lead_company: s.company_name || post.lead_company || null,\n    lead_website: s.lead_website || post.lead_website || null,\n    lead_contact: s.contact_info || null,\n    lead_score: Math.round(s.overall_score * 10),\n    alert_tier: s.alert_tier,\n    discovered_at: new Date().toISOString(),\n    status: 'new',\n    outreach_draft: '',\n  }};\n}\n\nconst results = [];\nfor (let i = 0; i < posts.length; i += BATCH_SIZE) {\n  const batch = posts.slice(i, i + BATCH_SIZE);\n  const postsBlock = batch.map((p, idx) =>\n    'POST ' + (idx+1) + ':\\nTitle: ' + p.title +\n    '\\nSource: ' + (p.source||'') +\n    '\\nAuthor: ' + (p.author||'unknown') +\n    '\\nDescription: ' + (p.description||'').substring(0, 600)\n  ).join('\\n\\n---\\n\\n');\n\n  const schema = '{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"2-3 sentences\",\"industry\":\"FinTech/HealthTech/SaaS/Manufacturing/eCommerce/General\",\"tags\":[],\"reasoning\":\"brief\",\"estimated_budget_text\":null,\"deadline_text\":null,\"location\":null,\"tech_stack\":[],\"company_name\":null,\"contact_info\":null,\"lead_founder_name\":null,\"lead_website\":null,\"reddit_author\":null}';\n  const prompt = SYSTEM_PROMPT + '\\n\\nScore ALL ' + batch.length + ' posts. Return ONLY a valid JSON array with exactly ' + batch.length + ' objects. Each object must have: ' + schema + '\\n\\n' + postsBlock;\n\n  let batchScores = null;\n  let debugSnippet = '';\n  try {\n    const respRaw = await callGeminiWithRetry(prompt);\n    const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n    const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n    debugSnippet = raw.substring(0, 300);\n    const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n    const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n    if (match) {\n      const parsed = JSON.parse(match[0]);\n      if (Array.isArray(parsed) && parsed.length > 0) batchScores = parsed;\n    }\n  } catch(e) { debugSnippet = 'EXCEPTION: ' + e.message; }\n\n  for (let j = 0; j < batch.length; j++) {\n    const s = batchScores && batchScores[j] ? computeScores(batchScores[j]) : fallback(debugSnippet || 'no response');\n    results.push(buildItem(batch[j], s));\n  }\n\n  if (i + BATCH_SIZE < posts.length) await new Promise(r => setTimeout(r, BETWEEN_BATCH_DELAY_MS));\n}\n\nreturn results;"
+            },
+            "id": "gemini-batch-score",
+            "name": "Gemini - Batch Score & Parse",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                880,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 1
+                    },
+                    "conditions": [
+                        {
+                            "id": "check-score",
+                            "operator": {
+                                "type": "number",
+                                "operation": "gte"
+                            },
+                            "leftValue": "={{ $json.overall_score }}",
+                            "rightValue": 0
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "id": "check-lead-info",
+            "name": "Check - Has Lead Info",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                1120,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": false,
+                        "leftValue": "",
+                        "typeValidation": "loose",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "check-real-company",
+                            "operator": {
+                                "type": "string",
+                                "operation": "notEmpty"
+                            },
+                            "leftValue": "={{ $json.lead_website || $json.lead_company || $json.company_name || '' }}"
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "id": "check-company-signal",
+            "name": "Check - Has Company Signal",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                1360,
+                -160
+            ]
+        },
+        {
+            "parameters": {
+                "url": "=https://api.hunter.io/v2/domain-search",
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "={{ $json.lead_website ? 'domain' : 'company' }}",
+                            "value": "={{ $json.lead_website ? ($json.lead_website).replace(/^https?:\\/\\/(www\\.)?/, '').split('/')[0] : ($json.lead_company || $json.company_name || '') }}"
+                        },
+                        {
+                            "name": "api_key",
+                            "value": "={{ $env.HUNTER_API_KEY }}"
+                        },
+                        {
+                            "name": "limit",
+                            "value": "5"
+                        }
+                    ]
+                },
+                "options": {
+                    "timeout": 15000
+                }
+            },
+            "id": "hunter-enrich",
+            "name": "Hunter - Enrich Lead",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                1600,
+                -160
+            ],
+            "onError": "continueRegularOutput"
+        },
+        {
+            "parameters": {
+                "jsCode": "const hunterResp = $input.item.json;\nconst original = $('Check - Has Lead Info').item.json;\nconst emails = hunterResp.data?.emails || [];\nconst priority = ['ceo','founder','co-founder','cto','owner','president','vp','director'];\nlet person = emails.find(e => priority.some(t => (e.position||'').toLowerCase().includes(t))) || emails[0] || null;\nreturn [{ json: {\n  ...original,\n  hunter_name: person ? `${person.first_name||''} ${person.last_name||''}`.trim() : '',\n  hunter_email: person?.value || '',\n  hunter_title: person?.position || '',\n  hunter_company: hunterResp.data?.organization || original.lead_company || '',\n}}];"
+            },
+            "id": "parse-hunter",
+            "name": "Parse Hunter Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1840,
+                -160
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "return [{ json: {\n  ...$input.item.json,\n  hunter_name: '',\n  hunter_email: '',\n  hunter_title: '',\n  hunter_company: '',\n}}];"
+            },
+            "id": "set-empty-hunter-fields",
+            "name": "Set Empty Hunter Fields",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1360,
+                160
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "return [{ json: {\n  ...$input.item.json,\n  enrichment_source: 'hunter-miss',\n}}];"
+            },
+            "id": "flag-hunter-miss",
+            "name": "Flag - Hunter Miss",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1840,
+                -320
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": false,
+                        "leftValue": "",
+                        "typeValidation": "loose",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "check-email-exists",
+                            "operator": {
+                                "type": "string",
+                                "operation": "notEmpty"
+                            },
+                            "leftValue": "={{ $json.hunter_email }}"
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "id": "check-hunter-has-email",
+            "name": "Check - Hunter Has Email",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                2080,
+                -160
+            ]
+        },
+        {
+            "parameters": {},
+            "id": "merge-lead-branches",
+            "name": "Merge Lead Branches",
+            "type": "n8n-nodes-base.merge",
+            "typeVersion": 3,
+            "position": [
+                2320,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const seen = new Map();\nfor (const item of $input.all()) {\n  const id = item.json.source_id;\n  if (!id) continue;\n  if (!seen.has(id)) {\n    seen.set(id, item.json);\n  } else {\n    if (item.json.hunter_email && !seen.get(id).hunter_email) {\n      seen.set(id, item.json);\n    }\n  }\n}\nreturn [...seen.values()]\n  .sort((a, b) => (b.overall_score||0) - (a.overall_score||0))\n  .map(json => ({ json }));"
+            },
+            "id": "dedup-by-source-id",
+            "name": "Dedup by Source ID",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2560,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "score-check",
+                            "operator": {
+                                "type": "number",
+                                "operation": "gte"
+                            },
+                            "leftValue": "={{ $json.overall_score }}",
+                            "rightValue": 0.3
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "id": "filter-score",
+            "name": "Filter - Score >= 0.30",
+            "type": "n8n-nodes-base.filter",
+            "typeVersion": 2.2,
+            "position": [
+                2800,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "appendOrUpdate",
+                "documentId": {
+                    "__rl": true,
+                    "mode": "url",
+                    "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "mode": "name",
+                    "value": "Opportunities"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Source ID": "={{ $json.source_id }}",
+                        "Title": "={{ $json.title }}",
+                        "Subreddit": "={{ $json.subreddit }}",
+                        "Source URL": "={{ $json.source_url }}",
+                        "Posted At": "={{ $json.posted_at }}",
+                        "Discovered At": "={{ $json.discovered_at }}",
+                        "Author": "={{ $json.author }}",
+                        "Overall Score": "={{ $json.overall_score }}",
+                        "Relevance Score": "={{ $json.relevance_score }}",
+                        "Budget Score": "={{ $json.budget_score }}",
+                        "Urgency Score": "={{ $json.urgency_score }}",
+                        "Win Probability": "={{ $json.win_probability }}",
+                        "Alert Tier": "={{ $json.alert_tier }}",
+                        "Industry": "={{ $json.industry }}",
+                        "AI Summary": "={{ $json.ai_summary }}",
+                        "AI Tags": "={{ ($json.ai_tags || []).join(', ') }}",
+                        "Tech Stack": "={{ ($json.tech_stack || []).join(', ') }}",
+                        "Budget Mentioned": "={{ $json.estimated_budget_text }}",
+                        "Location": "={{ $json.location }}",
+                        "Upvotes": "={{ $json.upvotes }}",
+                        "Comments": "={{ $json.num_comments }}",
+                        "Status": "new",
+                        "AI Reasoning": "={{ $json.ai_reasoning }}",
+                        "Lead Founder": "={{ $json.lead_founder || '' }}",
+                        "Lead Company": "={{ $json.lead_company || '' }}",
+                        "Lead Website": "={{ $json.lead_website || '' }}",
+                        "Lead Contact": "={{ $json.lead_contact || '' }}",
+                        "Lead Score": "={{ $json.lead_score || '' }}",
+                        "Hunter Name": "={{ $json.hunter_name || '' }}",
+                        "Hunter Email": "={{ $json.hunter_email || '' }}",
+                        "Hunter Title": "={{ $json.hunter_title || '' }}",
+                        "Hunter Company": "={{ $json.hunter_company || '' }}"
+                    },
+                    "matchingColumns": [
+                        "Source ID"
+                    ],
+                    "schema": [
+                        {
+                            "id": "Source ID",
+                            "displayName": "Source ID",
+                            "required": false,
+                            "defaultMatch": true,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Title",
+                            "displayName": "Title",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Subreddit",
+                            "displayName": "Subreddit",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Source URL",
+                            "displayName": "Source URL",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Posted At",
+                            "displayName": "Posted At",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Outreach Draft",
+                            "displayName": "Outreach Draft",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Discovered At",
+                            "displayName": "Discovered At",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Author",
+                            "displayName": "Author",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Overall Score",
+                            "displayName": "Overall Score",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Relevance Score",
+                            "displayName": "Relevance Score",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Budget Score",
+                            "displayName": "Budget Score",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Urgency Score",
+                            "displayName": "Urgency Score",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Win Probability",
+                            "displayName": "Win Probability",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Alert Tier",
+                            "displayName": "Alert Tier",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Industry",
+                            "displayName": "Industry",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "AI Summary",
+                            "displayName": "AI Summary",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "AI Tags",
+                            "displayName": "AI Tags",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Tech Stack",
+                            "displayName": "Tech Stack",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Budget Mentioned",
+                            "displayName": "Budget Mentioned",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Location",
+                            "displayName": "Location",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Upvotes",
+                            "displayName": "Upvotes",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Comments",
+                            "displayName": "Comments",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Status",
+                            "displayName": "Status",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "AI Reasoning",
+                            "displayName": "AI Reasoning",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Lead Founder",
+                            "displayName": "Lead Founder",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Lead Company",
+                            "displayName": "Lead Company",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Lead Website",
+                            "displayName": "Lead Website",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Lead Contact",
+                            "displayName": "Lead Contact",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Lead Score",
+                            "displayName": "Lead Score",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Hunter Name",
+                            "displayName": "Hunter Name",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Hunter Email",
+                            "displayName": "Hunter Email",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Hunter Title",
+                            "displayName": "Hunter Title",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Hunter Company",
+                            "displayName": "Hunter Company",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        }
+                    ],
+                    "attemptToConvertTypes": false,
+                    "convertFieldsToString": false
+                },
+                "options": {}
+            },
+            "id": "append-to-sheet",
+            "name": "Append to Google Sheet",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.6,
+            "position": [
+                3040,
+                -160
+            ],
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "HopOeXjaGgSku8RO",
+                    "name": "Google Sheets account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "id": "loop-items",
+            "name": "Loop Over Items",
+            "type": "n8n-nodes-base.splitInBatches",
+            "typeVersion": 3,
+            "position": [
+                3040,
+                160
+            ],
+            "onError": "continueRegularOutput"
+        },
+        {
+            "parameters": {
+                "jsCode": "await new Promise(r => setTimeout(r, 2000));\nreturn $input.all();"
+            },
+            "id": "wait-loop",
+            "name": "Wait - Process Rate Limit",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                3280,
+                160
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "alert-check",
+                            "operator": {
+                                "type": "number",
+                                "operation": "gte"
+                            },
+                            "leftValue": "={{ $json[\"Overall Score\"] }}",
+                            "rightValue": 0.5
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "id": "check-alert",
+            "name": "Check - Score >= 0.50 (Instant Alert)",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                3520,
+                160
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + $env.GOOGLE_AI_API_KEY }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({\n  \"contents\": [{\"parts\": [{\"text\": `You are writing as Ujjwal Roy, CEO of ScaleBuild AI (Junkiri Labs LLC).\n\nLEAD:\nTitle: ${$json[\"Title\"] || $json.title || \"\"}\nSummary: ${$json[\"AI Summary\"] || $json.ai_summary || \"\"}\nIndustry: ${$json[\"Industry\"] || $json.industry || \"\"}\nTech Stack: ${$json[\"Tech Stack\"] || ($json.tech_stack||[]).join(', ') || \"Not specified\"}\nBudget: ${$json[\"Budget Mentioned\"] || $json.estimated_budget_text || \"Not mentioned\"}\nSource: r/${$json[\"Subreddit\"] || $json.subreddit || \"HackerNews\"}\n\nRULES:\n- Write a Reddit DM as Ujjwal Roy, CEO of ScaleBuild AI\n- Tone: casual, human, conversational — like one founder messaging another\n- Max 100 words, no fluff\n- Start by referencing their specific pain point\n- Briefly mention ScaleBuild AI helps with AI/automation (Intel/IBM/Micron background)\n- End with a soft CTA\n- NO em dashes, NO exclamation marks\n- End with \"- Ujjwal (ScaleBuild AI)\"\n\nReturn ONLY the DM message text. No markdown.`}]}],\n  \"generationConfig\": {\"maxOutputTokens\": 6000, \"temperature\": 0.6}\n}) }}",
+                "options": {
+                    "timeout": 30000
+                }
+            },
+            "id": "gemini-outreach",
+            "name": "Gemini - Generate Outreach",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                3760,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const geminiResp = $input.first().json;\nconst original = $('Check - Score >= 0.50 (Instant Alert)').item.json;\nconst draft = geminiResp.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'Outreach generation failed';\nreturn [{ json: { ...original, outreach_draft: draft } }];"
+            },
+            "id": "parse-outreach",
+            "name": "Parse Outreach Draft",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                4000,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "select": "channel",
+                "channelId": {
+                    "__rl": true,
+                    "value": "#dealhunter-alerts",
+                    "mode": "name"
+                },
+                "text": "={{ (function() { const d = $('Parse Outreach Draft').item.json; const author = d['Author'] || d['author'] || ''; const dmLink = author ? 'https://reddit.com/message/compose?to=' + author : ''; return '🚨 *HIGH-VALUE LEAD* (Score: ' + d['Overall Score'] + ')\\n\\n*' + d['Title'] + '*\\nr/' + (d['Subreddit'] || '') + ' | Industry: ' + (d['Industry'] || 'Unknown') + '\\n\\n*AI Summary:*\\n' + (d['AI Summary'] || '') + '\\n\\n📊 Relevance: ' + d['Relevance Score'] + ' | Budget: ' + d['Budget Score'] + ' | Win Prob: ' + d['Win Probability'] + '\\n💰 Budget: ' + (d['Budget Mentioned'] || 'Not mentioned') + '\\n\\n*👤 Reddit Author*\\n• u/' + (author || 'unknown') + (dmLink ? '\\n• <' + dmLink + '|Send Reddit DM>' : '') + '\\n\\n*💼 Lead Contact (Hunter Enriched)*\\n• Name: ' + (d['Hunter Name'] || d['Lead Founder'] || 'Not found') + '\\n• Company: ' + (d['Hunter Company'] || d['Lead Company'] || 'Not found') + '\\n• Email: ' + (d['Hunter Email'] || d['Lead Contact'] || 'Not found') + '\\n• Website: ' + (d['Lead Website'] || 'Not found') + '\\n⭐ Lead Score: ' + d['Lead Score'] + '/10\\n\\n<' + d['Source URL'] + '|View Post>\\n\\n*📧 Outreach Draft:*\\n' + (d['outreach_draft'] || ''); })() }}",
+                "otherOptions": {}
+            },
+            "id": "slack-instant",
+            "name": "Slack - Instant Alert",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.2,
+            "position": [
+                4240,
+                -80
+            ],
+            "webhookId": "b221b58c-acdf-48e8-a77d-1f2820f1dcee",
+            "credentials": {
+                "slackApi": {
+                    "id": "12yhiaMJlTGLSK74",
+                    "name": "Slack account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "fromEmail": "deshpane834@gmail.com",
+                "toEmail": "deshpane834@gmail.com",
+                "subject": "=🚨 DealHunter [{{ $('Parse Outreach Draft').item.json['Overall Score'] }}] - {{ $('Parse Outreach Draft').item.json['Title'].substring(0,60) }}",
+                "options": {
+                    "appendAttribution": false
+                }
+            },
+            "id": "email-instant",
+            "name": "Email - Instant Alert",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 2.1,
+            "position": [
+                4240,
+                80
+            ],
+            "webhookId": "2760fafa-5075-44ec-8c6c-dfe465b1b6b0",
+            "credentials": {
+                "smtp": {
+                    "id": "FNx0wyiO1TAuFQu3",
+                    "name": "SMTP account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "appendOrUpdate",
+                "documentId": {
+                    "__rl": true,
+                    "mode": "url",
+                    "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "mode": "name",
+                    "value": "Opportunities"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Source ID": "={{ $json.source_id || $json['Source ID'] }}",
+                        "Outreach Draft": "={{ $json.outreach_draft }}",
+                        "Status": "outreach_ready"
+                    },
+                    "matchingColumns": [
+                        "Source ID"
+                    ],
+                    "schema": [
+                        {
+                            "id": "Source ID",
+                            "displayName": "Source ID",
+                            "required": false,
+                            "defaultMatch": true,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "Outreach Draft",
+                            "displayName": "Outreach Draft",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": false
+                        },
+                        {
+                            "id": "Status",
+                            "displayName": "Status",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": false
+                        }
+                    ],
+                    "attemptToConvertTypes": false,
+                    "convertFieldsToString": false
+                },
+                "options": {}
+            },
+            "id": "update-sheet-outreach",
+            "name": "Update Sheet - Add Outreach Draft",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.6,
+            "position": [
+                4240,
+                240
+            ],
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "HopOeXjaGgSku8RO",
+                    "name": "Google Sheets account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "select": "channel",
+                "channelId": {
+                    "__rl": true,
+                    "value": "#dealhunter-digest",
+                    "mode": "name"
+                },
+                "text": "={{ ($json.overall_score >= 0.75 ? '🟠 *MEDIUM-HIGH LEAD*' : '🟡 *MEDIUM LEAD*') + ' (Score: ' + $json.overall_score + ')\\n' + ($json.source?.startsWith('reddit') ? '🤖 Reddit r/' + $json.subreddit : '🟤 HackerNews') + ' | ' + ($json.industry || 'Unknown industry') + '\\n\\n*' + $json.title + '*\\n' + ($json.lead_company ? '🏢 ' + $json.lead_company + '\\n' : '') + ($json.lead_website ? '🌐 ' + $json.lead_website + '\\n' : '') + '\\n' + ($json.ai_summary || '').substring(0, 200) + '\\n\\n📊 Relevance: ' + $json.relevance_score + ' | Budget: ' + $json.budget_score + ' | Win Prob: ' + $json.win_probability + '\\n<' + $json.source_url + '|View Post>' }}",
+                "otherOptions": {}
+            },
+            "id": "slack-digest",
+            "name": "Slack - Digest Notification",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.2,
+            "position": [
+                3760,
+                320
+            ],
+            "webhookId": "d878e0ac-5e03-4bf4-9ae9-3086408ea1d4",
+            "credentials": {
+                "slackApi": {
+                    "id": "12yhiaMJlTGLSK74",
+                    "name": "Slack account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "cronExpression",
+                            "expression": "0 13 * * *"
+                        }
+                    ]
+                }
+            },
+            "id": "daily-cron",
+            "name": "Cron - Daily Digest 8AM ET",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                -1600,
+                480
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "getAll",
+                "documentId": {
+                    "__rl": true,
+                    "mode": "url",
+                    "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+                }
+            },
+            "id": "fetch-digest-leads",
+            "name": "Fetch Last 24h Leads",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.6,
+            "position": [
+                -1360,
+                480
+            ],
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "HopOeXjaGgSku8RO",
+                    "name": "Google Sheets account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "const items = $input.all();\nconst now = new Date();\nconst yesterday = new Date(now.getTime() - 24*60*60*1000);\nconst leads = items.filter(item => {\n  const discovered = new Date(item.json['Discovered At'] || 0);\n  const score = parseFloat(item.json['Overall Score']) || 0;\n  return discovered >= yesterday && score >= 0.70;\n}).sort((a,b) => (parseFloat(b.json['Overall Score'])||0) - (parseFloat(a.json['Overall Score'])||0)).slice(0,15);\n\nif (leads.length === 0) return [{ json: { count: 0, emailBody: '<p>No leads scored >= 0.70 in last 24h.</p>', hasLeads: false } }];\n\nconst rows = leads.map((item,idx) => {\n  const d = item.json;\n  const score = parseFloat(d['Overall Score'])||0;\n  return `<tr><td>${idx+1}</td><td><a href=\"${d['Source URL']}\">${d['Title']}</a></td><td>r/${d['Subreddit']||''}</td><td><strong>${score.toFixed(2)}</strong></td><td>${(d['AI Summary']||'').substring(0,120)}...</td></tr>`;\n}).join('');\n\nconst emailBody = `<h2>📊 DealHunter Daily Digest</h2><p><strong>${leads.length} leads</strong> scored ≥ 0.70 in last 24h</p><table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%\"><tr><th>#</th><th>Title</th><th>Source</th><th>Score</th><th>Summary</th></tr>${rows}</table><p><em>Generated ${now.toISOString()}</em></p>`;\n\nconst byTier = {hot:0,medium:0,low:0};\nleads.forEach(item => {\n  const s = parseFloat(item.json['Overall Score'])||0;\n  if(s>=0.85)byTier.hot++; else if(s>=0.60)byTier.medium++; else byTier.low++;\n});\nconst slackSummary = `📊 *DealHunter Daily Report*\\n\\n*${leads.length} leads* scored ≥ 0.70 in last 24h\\n🔴 Hot: ${byTier.hot} | 🟠 Medium: ${byTier.medium} | 🟡 Low: ${byTier.low}\\n📧 Full report sent to email`;\n\nreturn [{ json: { count: leads.length, emailBody, hasLeads: true, slackSummary } }];"
+            },
+            "id": "build-digest",
+            "name": "Build Daily Digest Email",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -1120,
+                480
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2,
+                        "leftValue": "",
+                        "typeValidation": "loose"
+                    },
+                    "combinator": "and",
+                    "conditions": [
+                        {
+                            "id": "has-leads",
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "true"
+                            },
+                            "leftValue": "={{ $json.hasLeads }}",
+                            "rightValue": ""
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "check-digest-leads",
+            "name": "Check - Has Leads Today",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                -880,
+                480
+            ]
+        },
+        {
+            "parameters": {
+                "fromEmail": "deshpane834@gmail.com",
+                "toEmail": "deshpane834@gmail.com",
+                "subject": "=📊 DealHunter Daily Digest - {{ $json.count }} New Leads",
+                "options": {
+                    "appendAttribution": false
+                }
+            },
+            "id": "send-digest",
+            "name": "Send Daily Digest Email",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 2.1,
+            "position": [
+                -640,
+                480
+            ],
+            "webhookId": "950530c0-974a-47e2-8281-dfd68972a851",
+            "credentials": {
+                "smtp": {
+                    "id": "FNx0wyiO1TAuFQu3",
+                    "name": "SMTP account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "text": "={{ $json.slackSummary }}",
+                "otherOptions": {}
+            },
+            "id": "slack-daily-summary",
+            "name": "Slack - Daily Summary",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.3,
+            "position": [
+                -400,
+                480
+            ],
+            "webhookId": "9ded21da-2a33-43bd-ad3f-3ffdacbc4f15",
+            "credentials": {
+                "slackApi": {
+                    "id": "12yhiaMJlTGLSK74",
+                    "name": "Slack account"
+                }
+            }
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "Cron - Every 2 Hours": {
+            "main": [
+                [
+                    {
+                        "node": "Get Business Profile",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Business Profile": {
+            "main": [
+                [
+                    {
+                        "node": "AI Subreddit Selector",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini - Subreddit Selector Model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "AI Subreddit Selector",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Subreddit Output Parser": {
+            "ai_outputParser": [
+                [
+                    {
+                        "node": "AI Subreddit Selector",
+                        "type": "ai_outputParser",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "AI Subreddit Selector": {
+            "main": [
+                [
+                    {
+                        "node": "Build Apify Input",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Apify Input": {
+            "main": [
+                [
+                    {
+                        "node": "Apify - Start Run",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Apify - Start Run": {
+            "main": [
+                [
+                    {
+                        "node": "Store Run ID",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Store Run ID": {
+            "main": [
+                [
+                    {
+                        "node": "Wait - Apify Poll (20s)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Wait - Apify Poll (20s)": {
+            "main": [
+                [
+                    {
+                        "node": "Apify - Check Run Status",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Apify - Check Run Status": {
+            "main": [
+                [
+                    {
+                        "node": "Run Complete?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Run Complete?": {
+            "main": [
+                [
+                    {
+                        "node": "Apify - Fetch Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Keep Run ID",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Keep Run ID": {
+            "main": [
+                [
+                    {
+                        "node": "Wait - Apify Poll (20s)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Apify - Fetch Results": {
+            "main": [
+                [
+                    {
+                        "node": "Combine All & Fetch HN",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Combine All & Fetch HN": {
+            "main": [
+                [
+                    {
+                        "node": "Normalize to RawOpportunity",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Normalize to RawOpportunity": {
+            "main": [
+                [
+                    {
+                        "node": "Gemini - Batch Score & Parse",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini - Batch Score & Parse": {
+            "main": [
+                [
+                    {
+                        "node": "Check - Has Lead Info",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check - Has Lead Info": {
+            "main": [
+                [
+                    {
+                        "node": "Check - Has Company Signal",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Set Empty Hunter Fields",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check - Has Company Signal": {
+            "main": [
+                [
+                    {
+                        "node": "Hunter - Enrich Lead",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Flag - Hunter Miss",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Hunter - Enrich Lead": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Hunter Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Hunter Response": {
+            "main": [
+                [
+                    {
+                        "node": "Check - Hunter Has Email",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check - Hunter Has Email": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Lead Branches",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Flag - Hunter Miss",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Flag - Hunter Miss": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Lead Branches",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Set Empty Hunter Fields": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Lead Branches",
+                        "type": "main",
+                        "index": 1
+                    }
+                ]
+            ]
+        },
+        "Merge Lead Branches": {
+            "main": [
+                [
+                    {
+                        "node": "Dedup by Source ID",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Dedup by Source ID": {
+            "main": [
+                [
+                    {
+                        "node": "Filter - Score >= 0.30",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter - Score >= 0.30": {
+            "main": [
+                [
+                    {
+                        "node": "Append to Google Sheet",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Append to Google Sheet": {
+            "main": [
+                [
+                    {
+                        "node": "Loop Over Items",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Loop Over Items": {
+            "main": [
+                [
+                    {
+                        "node": "Wait - Process Rate Limit",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                []
+            ]
+        },
+        "Wait - Process Rate Limit": {
+            "main": [
+                [
+                    {
+                        "node": "Check - Score >= 0.50 (Instant Alert)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check - Score >= 0.50 (Instant Alert)": {
+            "main": [
+                [
+                    {
+                        "node": "Gemini - Generate Outreach",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Slack - Digest Notification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini - Generate Outreach": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Outreach Draft",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Outreach Draft": {
+            "main": [
+                [
+                    {
+                        "node": "Slack - Instant Alert",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Email - Instant Alert",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Update Sheet - Add Outreach Draft",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Slack - Instant Alert": {
+            "main": [
+                [
+                    {
+                        "node": "Loop Over Items",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Email - Instant Alert": {
+            "main": [
+                []
+            ]
+        },
+        "Update Sheet - Add Outreach Draft": {
+            "main": [
+                []
+            ]
+        },
+        "Slack - Digest Notification": {
+            "main": [
+                [
+                    {
+                        "node": "Loop Over Items",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Cron - Daily Digest 8AM ET": {
+            "main": [
+                [
+                    {
+                        "node": "Fetch Last 24h Leads",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch Last 24h Leads": {
+            "main": [
+                [
+                    {
+                        "node": "Build Daily Digest Email",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Daily Digest Email": {
+            "main": [
+                [
+                    {
+                        "node": "Check - Has Leads Today",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check - Has Leads Today": {
+            "main": [
+                [
+                    {
+                        "node": "Send Daily Digest Email",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                []
+            ]
+        },
+        "Send Daily Digest Email": {
+            "main": [
+                [
+                    {
+                        "node": "Slack - Daily Summary",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "meta": {
+        "instanceId": "bfa881661c018749d441660d36f63fdf552d02437db15de1ed54bb7a572d9e36"
+    },
+    "id": "dealhunter-merged-pro",
+    "tags": []
+}
