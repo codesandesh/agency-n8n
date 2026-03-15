@@ -111,6 +111,7 @@ services:
       - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
       - APOLLO_API_KEY=${APOLLO_API_KEY}
       - HUNTER_API_KEY=${HUNTER_API_KEY}
+      - N8N_RUNNERS_TASK_TIMEOUT=600
     ports:
       - "127.0.0.1:5678:5678"
     links:
