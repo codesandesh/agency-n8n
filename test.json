@@ -65,7 +65,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const config = $('Build Apify Input').first().json;\nconst keywordsSkip = config.keywordsSkip || [];\nconst flairMap = {};\n(config.subreddits || []).forEach(s => {\n  if (s.flair) flairMap[s.name.toLowerCase()] = s.flair.toLowerCase();\n});\n\nconst rawItems = $input.all();\nconst results = [];\n\n// Persistent cross-run deduplication \u2014 stored in n8n DB, expires after 7 days\nconst staticData = $getWorkflowStaticData('global');\nconst sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;\nconst seenIdsMap = Object.fromEntries(\n  Object.entries(staticData.seenIds || {}).filter(([, ts]) => ts > sevenDaysAgo)\n);\n\nfor (const item of rawItems) {\n  if (!item.json || typeof item.json !== 'object') continue;\n  const post = item.json;\n  const src = post._source || 'reddit';\n\n  try {\n\n    if (post._noData) continue; // empty-run sentinel\n\n        // \u2500\u2500 LINKEDIN \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    if (src === 'linkedin') {\n      // LinkedIn POST (not job listing) from buIWk2uOUzTmcLsuB post-search actor\n      const content = String(post.content || '').trim();\n      if (!content) continue;\n      const title = content.substring(0, 120).replace(/\\n/g, ' ');\n      const id = 'linkedin_' + String(post.id || post.entityId || title).substring(0, 80);\n      if (seenIdsMap[id]) continue;\n      seenIdsMap[id] = Date.now();\n      const authorObj = post.author || {};\n      const authorName = String(authorObj.name || '');\n      const authorHeadline = String(authorObj.info || '');   // e.g. \"CEO at Acme Corp\"\n      const authorWebsite = String(authorObj.website || '');\n      const authorLinkedin = String(authorObj.linkedinUrl || '');\n      const authorCompany = String(authorObj.company || ''); // direct company field if actor provides it\n\n      // Extract company from headline: \"CEO at Acme\" / \"Founder @ Acme\" / \"Title | Acme Corp\"\n      let extractedCompany = authorCompany;\n      if (!extractedCompany && authorHeadline) {\n        // Try \"at Company\" or \"@ Company\" pattern\n        const atIdx = authorHeadline.search(/\\bat\\s+|@\\s*/i);\n        if (atIdx >= 0) {\n          const afterAt = authorHeadline.slice(authorHeadline.indexOf(' ', atIdx) + 1 || atIdx + 1).split(/[|,]/)[0].trim();\n          if (afterAt && afterAt.split(' ').length <= 4) extractedCompany = afterAt;\n        }\n        // Try \"| Company\" pattern \u2014 take first pipe segment that looks like a company name\n        if (!extractedCompany) {\n          const parts = authorHeadline.split('|').map(p => p.trim()).filter(p => p.length > 2 && p.length < 40);\n          for (const part of parts.slice(1)) {\n            const words = part.split(' ').filter(Boolean);\n            // Company-like: short, starts with capital letter, not a verb phrase\n            if (words.length >= 1 && words.length <= 4 && /^[A-Z]/.test(words[0])) {\n              extractedCompany = part;\n              break;\n            }\n          }\n        }\n      }\n\n      const likes = post.engagement?.likes || 0;\n      const comments = post.engagement?.comments || 0;\n      results.push({ json: {\n        title,\n        description: content.substring(0, 3000),\n        source: 'linkedin',\n        source_url: String(post.linkedinUrl || ''),\n        source_id: id,\n        posted_at: post.postedAt?.date || new Date().toISOString(),\n        author: authorName,\n        subreddit: '', upvotes: likes, num_comments: comments,\n        flair_text: authorHeadline,\n        budget_text: '',\n        company_domain: authorWebsite,\n        contact_name: authorName,\n        contact_linkedin: authorLinkedin,\n        lead_website: authorWebsite || null,\n        lead_company: extractedCompany || null,   // company from headline, not author name\n        lead_founder: authorName || null,          // person's name goes here\n      }});\n      continue;\n    }\n\n    // \u2500\u2500 HACKER NEWS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    if (src === 'hackernews') {\n      const title = String(post.title || '').substring(0, 500);\n      if (!title) continue;\n      const id = 'hn_' + String(post.objectID || '');\n      if (seenIdsMap[id]) continue;\n      if (id !== 'hn_') seenIdsMap[id] = Date.now();\n      const body = String(post._hn_description || post.story_text || '').replace(/<[^>]*>/g, '').substring(0, 3000);\n      results.push({ json: {\n        title, description: body,\n        source: 'hackernews',\n        source_url: post.url || `https://news.ycombinator.com/item?id=${post.objectID}`,\n        source_id: id,\n        posted_at: post.created_at || new Date().toISOString(),\n        author: String(post.author || ''),\n        subreddit: '',\n        upvotes: Number(post.points || 0),\n        num_comments: Number(post.num_comments || 0),\n        flair_text: '', budget_text: '',\n      }});\n      continue;\n    }\n\n    // \u2500\u2500 REDDIT \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    if (post.error || post.type === 'run-failed') continue;\n    const posts = Array.isArray(post) ? post : [post];\n    for (const p of posts) {\n      if (!p || typeof p !== 'object') continue;\n      const postTitle = String(p.title || '').substring(0, 500);\n      if (!postTitle) continue;\n      const postId = 'reddit_' + String(p.parsedId || p.id || '');\n      if (seenIdsMap[postId]) continue;\n      if (postId !== 'reddit_') seenIdsMap[postId] = Date.now();\n      const postBody = String(p.body || p.text || p.selfText || '');\n      const postFlair = String(p.flair || p.linkFlair || p.link_flair_text || '');\n      const postUrl = String(p.url || p.link || '');\n      const postSubreddit = String(p.communityName || p.subreddit || '');\n      const postAuthor = typeof p.author === 'object' ? (p.author?.name || '') : String(p.author || '');\n      const postScore = Number(p.score || p.upVotes || 0);\n      const postComments = Number(p.numberOfComments || p.numComments || 0);\n      const postDate = p.createdAt || p.publishedAt || (p.created_utc ? new Date(p.created_utc * 1000).toISOString() : new Date().toISOString());\n      if (p.dataType === 'comment' || p.postId || p.parentId) continue;\n      if (postBody === '[removed]' || postBody === '[deleted]') continue;\n      if (postFlair.toLowerCase() === 'for hire' || postTitle.toLowerCase().startsWith('[for hire]')) continue;\n      const requiredFlair = flairMap[postSubreddit.toLowerCase()];\n      if (requiredFlair && postFlair && !postFlair.toLowerCase().includes(requiredFlair)) continue;\n      const fullText = (postTitle + ' ' + postBody).toLowerCase();\n      if (keywordsSkip.some(kw => fullText.includes(kw.toLowerCase()))) continue;\n      results.push({ json: {\n        title: postTitle,\n        description: postBody.substring(0, 3000),\n        source: 'reddit_' + postSubreddit.toLowerCase(),\n        source_url: postUrl || `https://reddit.com/r/${postSubreddit}`,\n        source_id: postId,\n        posted_at: postDate,\n        author: postAuthor,\n        subreddit: postSubreddit,\n        upvotes: postScore,\n        num_comments: postComments,\n        flair_text: postFlair,\n        budget_text: '',\n      }});\n    }\n\n  } catch(e) {\n    console.error(\"[Normalize] Failed on item:\", JSON.stringify(item.json).substring(0, 200), e.message);\n  }\n}\n\n// Persist seen IDs for next run\nstaticData.seenIds = seenIdsMap;\n\nreturn results;"
+        "jsCode": "const config = $('Build Apify Input').first().json;\nconst keywordsSkip = config.keywordsSkip || [];\nconst flairMap = {};\n(config.subreddits || []).forEach(s => {\n  if (s.flair) flairMap[s.name.toLowerCase()] = s.flair.toLowerCase();\n});\n\nconst rawItems = $input.all();\nconst results = [];\n\n// Persistent cross-run deduplication — stored in n8n DB, expires after 7 days\nconst staticData = $getWorkflowStaticData('global');\nconst sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;\nconst seenIdsMap = Object.fromEntries(\n  Object.entries(staticData.seenIds || {}).filter(([, ts]) => ts > sevenDaysAgo)\n);\n\nfor (const item of rawItems) {\n  if (!item.json || typeof item.json !== 'object') continue;\n  const post = item.json;\n  const src = post._source || 'reddit';\n\n  try {\n\n    if (post._noData) continue; // empty-run sentinel\n\n    \n\n    // ── HACKER NEWS ─────────────────────────────────────────────────────\n    if (src === 'hackernews') {\n      const title = String(post.title || '').substring(0, 500);\n      if (!title) continue;\n      const id = 'hn_' + String(post.objectID || '');\n      if (seenIdsMap[id]) continue;\n      if (id !== 'hn_') seenIdsMap[id] = Date.now();\n      const body = String(post._hn_description || post.story_text || '').replace(/<[^>]*>/g, '').substring(0, 3000);\n      results.push({ json: {\n        title, description: body,\n        source: 'hackernews',\n        source_url: post.url || `https://news.ycombinator.com/item?id=${post.objectID}`,\n        source_id: id,\n        posted_at: post.created_at || new Date().toISOString(),\n        author: String(post.author || ''),\n        subreddit: '',\n        upvotes: Number(post.points || 0),\n        num_comments: Number(post.num_comments || 0),\n        flair_text: '', budget_text: '',\n      }});\n      continue;\n    }\n\n    // ── REDDIT ──────────────────────────────────────────────────────────\n    if (post.error || post.type === 'run-failed') continue;\n    const posts = Array.isArray(post) ? post : [post];\n    for (const p of posts) {\n      if (!p || typeof p !== 'object') continue;\n      const postTitle = String(p.title || '').substring(0, 500);\n      if (!postTitle) continue;\n      const postId = 'reddit_' + String(p.parsedId || p.id || '');\n      if (seenIdsMap[postId]) continue;\n      if (postId !== 'reddit_') seenIdsMap[postId] = Date.now();\n      const postBody = String(p.body || p.text || p.selfText || '');\n      const postFlair = String(p.flair || p.linkFlair || p.link_flair_text || '');\n      const postUrl = String(p.url || p.link || '');\n      const postSubreddit = String(p.communityName || p.subreddit || '');\n      const postAuthor = typeof p.author === 'object' ? (p.author?.name || '') : String(p.author || '');\n      const postScore = Number(p.score || p.upVotes || 0);\n      const postComments = Number(p.numberOfComments || p.numComments || 0);\n      const postDate = p.createdAt || p.publishedAt || (p.created_utc ? new Date(p.created_utc * 1000).toISOString() : new Date().toISOString());\n      if (p.dataType === 'comment' || p.postId || p.parentId) continue;\n      if (postBody === '[removed]' || postBody === '[deleted]') continue;\n      if (postFlair.toLowerCase() === 'for hire' || postTitle.toLowerCase().startsWith('[for hire]')) continue;\n      const requiredFlair = flairMap[postSubreddit.toLowerCase()];\n      if (requiredFlair && postFlair && !postFlair.toLowerCase().includes(requiredFlair)) continue;\n      const fullText = (postTitle + ' ' + postBody).toLowerCase();\n      if (keywordsSkip.some(kw => fullText.includes(kw.toLowerCase()))) continue;\n      results.push({ json: {\n        title: postTitle,\n        description: postBody.substring(0, 3000),\n        source: 'reddit_' + postSubreddit.toLowerCase(),\n        source_url: postUrl || `https://reddit.com/r/${postSubreddit}`,\n        source_id: postId,\n        posted_at: postDate,\n        author: postAuthor,\n        subreddit: postSubreddit,\n        upvotes: postScore,\n        num_comments: postComments,\n        flair_text: postFlair,\n        budget_text: '',\n      }});\n    }\n\n  } catch(e) {\n    console.error(\"[Normalize] Failed on item:\", JSON.stringify(item.json).substring(0, 200), e.message);\n  }\n}\n\n// Persist seen IDs for next run\nstaticData.seenIds = seenIdsMap;\n\nreturn results;"
       },
       "id": "normalize-posts",
       "name": "Normalize to RawOpportunity",
@@ -155,10 +155,8 @@
             "Lead Score": "={{ $json.lead_score || '' }}",
             "Hunter Name": "={{ $json.hunter_name || '' }}",
             "Hunter Email": "={{ $json.hunter_email || '' }}",
-            "Hunter LinkedIn": "={{ $json.hunter_linkedin || '' }}",
             "Hunter Title": "={{ $json.hunter_title || '' }}",
-            "Hunter Company": "={{ $json.hunter_company || '' }}",
-            "Contact LinkedIn": "={{ $json.contact_linkedin || '' }}"
+            "Hunter Company": "={{ $json.hunter_company || '' }}"
           },
           "matchingColumns": [
             "Source ID"
@@ -168,7 +166,7 @@
               "id": "Source ID",
               "displayName": "Source ID",
               "required": false,
-              "defaultMatch": true,
+              "defaultMatch": false,
               "display": true,
               "type": "string",
               "canBeUsedToMatch": true
@@ -203,6 +201,15 @@
             {
               "id": "Posted At",
               "displayName": "Posted At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Outreach Draft",
+              "displayName": "Outreach Draft",
               "required": false,
               "defaultMatch": false,
               "display": true,
@@ -327,16 +334,6 @@
               "canBeUsedToMatch": true
             },
             {
-              "id": "Deadline Mentioned",
-              "displayName": "Deadline Mentioned",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
               "id": "Location",
               "displayName": "Location",
               "required": false,
@@ -344,16 +341,6 @@
               "display": true,
               "type": "string",
               "canBeUsedToMatch": true
-            },
-            {
-              "id": "Filter Result",
-              "displayName": "Filter Result",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
             },
             {
               "id": "Upvotes",
@@ -392,22 +379,13 @@
               "canBeUsedToMatch": true
             },
             {
-              "id": "Outreach Draft",
-              "displayName": "Outreach Draft",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
               "id": "Lead Founder",
               "displayName": "Lead Founder",
               "required": false,
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": false
+              "canBeUsedToMatch": true
             },
             {
               "id": "Lead Company",
@@ -416,7 +394,7 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": false
+              "canBeUsedToMatch": true
             },
             {
               "id": "Lead Website",
@@ -425,7 +403,7 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": false
+              "canBeUsedToMatch": true
             },
             {
               "id": "Lead Contact",
@@ -434,7 +412,7 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": false
+              "canBeUsedToMatch": true
             },
             {
               "id": "Lead Score",
@@ -442,8 +420,8 @@
               "required": false,
               "defaultMatch": false,
               "display": true,
-              "type": "number",
-              "canBeUsedToMatch": false
+              "type": "string",
+              "canBeUsedToMatch": true
             },
             {
               "id": "Hunter Name",
@@ -452,7 +430,7 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": false
+              "canBeUsedToMatch": true
             },
             {
               "id": "Hunter Email",
@@ -461,16 +439,7 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": false
-            },
-            {
-              "id": "Hunter LinkedIn",
-              "displayName": "Hunter LinkedIn",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": false
+              "canBeUsedToMatch": true
             },
             {
               "id": "Hunter Title",
@@ -479,7 +448,7 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": false
+              "canBeUsedToMatch": true
             },
             {
               "id": "Hunter Company",
@@ -488,18 +457,7 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": false
-            },
-            {
-              "id": "Contact LinkedIn",
-              "displayName": "Contact LinkedIn",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
+              "canBeUsedToMatch": true
             }
           ],
           "attemptToConvertTypes": false,
@@ -512,8 +470,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.6,
       "position": [
-        480,
-        0
+        416,
+        -608
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -531,26 +489,23 @@
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        672,
-        -656
+        496,
+        -800
       ],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "resume": "timeInterval",
-        "amount": 2,
-        "unit": "seconds"
+        "jsCode": "await new Promise(r => setTimeout(r, 2000));\nreturn $input.all();"
       },
       "id": "wait-loop",
       "name": "Wait - Process Rate Limit",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         928,
         0
-      ],
-      "webhookId": "e5a544d7-4065-4671-9928-df7a57450b92"
+      ]
     },
     {
       "parameters": {
@@ -600,7 +555,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  \"contents\": [{\"parts\": [{\"text\": `You are writing as Ujjwal Roy, CEO of ScaleBuild AI (Junkiri Labs LLC).\n\nLEAD:\nTitle: ${$json.title}\nSummary: ${$json.ai_summary}\nIndustry: ${$json.industry}\nTech Stack: ${($json.tech_stack||[]).join(', ')||'Not specified'}\nBudget: ${$json.estimated_budget_text||'Not mentioned'}\nSource: r/${$json.subreddit}\n\nRULES:\n- Write a Reddit DM (not an email) as Ujjwal Roy, CEO of ScaleBuild AI\n- Tone: casual, human, conversational — like one founder messaging another\n- Max 100 words, no fluff, no formal opener\n- Start by referencing their specific pain point from the post\n- Briefly mention ScaleBuild AI helps with AI/automation (Intel/IBM/Micron background)\n- End with a soft 1-sentence CTA (happy to chat if it's useful)\n- NO em dashes, NO exclamation marks, NO \"I hope this finds you well\"\n- NO email sign-off — just end with \"- Ujjwal (ScaleBuild AI)\"\n\nReturn ONLY the DM message text. No subject line. No markdown.`}]}],\n  \"generationConfig\": {\"maxOutputTokens\": 6000, \"temperature\": 0.6}\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  \"contents\": [{\"parts\": [{\"text\": `You are writing as Ujjwal Roy, CEO of ScaleBuild AI (Junkiri Labs LLC).\n\nLEAD:\nTitle: ${$json[\"Title\"] || $json.title || \"\"}\nSummary: ${$json[\"AI Summary\"] || $json.ai_summary || \"\"}\nIndustry: ${$json[\"Industry\"] || $json.industry || \"\"}\nTech Stack: ${$json[\"Tech Stack\"] || ($json.tech_stack||[]).join(', ') || \"Not specified\"}\nBudget: ${$json[\"Budget Mentioned\"] || $json.estimated_budget_text || \"Not mentioned\"}\nSource: r/${$json[\"Subreddit\"] || $json.subreddit || \"HackerNews\"}\n\nRULES:\n- Write a Reddit DM (not an email) as Ujjwal Roy, CEO of ScaleBuild AI\n- Tone: casual, human, conversational — like one founder messaging another\n- Max 100 words, no fluff, no formal opener\n- Start by referencing their specific pain point from the post\n- Briefly mention ScaleBuild AI helps with AI/automation (Intel/IBM/Micron background)\n- End with a soft 1-sentence CTA (happy to chat if it's useful)\n- NO em dashes, NO exclamation marks, NO \"I hope this finds you well\"\n- NO email sign-off — just end with \"- Ujjwal (ScaleBuild AI)\"\n\nReturn ONLY the DM message text. No subject line. No markdown.`}]}],\n  \"generationConfig\": {\"maxOutputTokens\": 6000, \"temperature\": 0.6}\n}) }}",
         "options": {
           "timeout": 30000
         }
@@ -635,7 +590,7 @@
           "value": "#dealhunter-alerts",
           "mode": "name"
         },
-        "text": "={{ (function() { const d = $('Parse Outreach Draft').item.json; const author = d['Author'] || d['author'] || ''; const dmLink = author ? 'https://reddit.com/message/compose?to=' + author : ''; return '\ud83d\udea8 *HIGH-VALUE LEAD* (Score: ' + d['Overall Score'] + ')\\n\\n*' + d['Title'] + '*\\nr/' + (d['Subreddit'] || '') + ' | Industry: ' + (d['Industry'] || 'Unknown') + '\\n\\n*AI Summary:*\\n' + (d['AI Summary'] || '') + '\\n\\n\ud83d\udcca Relevance: ' + d['Relevance Score'] + ' | Budget: ' + d['Budget Score'] + ' | Win Prob: ' + d['Win Probability'] + '\\n\ud83d\udcb0 Budget: ' + (d['Budget Mentioned'] || 'Not mentioned') + '\\n\\n*\ud83d\udc64 Reddit Author*\\n\u2022 u/' + (author || 'unknown') + (dmLink ? '\\n\u2022 <' + dmLink + '|Send Reddit DM>' : '') + '\\n\\n*\ud83d\udcbc Lead Contact (Hunter Enriched)*\\n\u2022 Name: ' + (d['Hunter Name'] || d['Lead Founder'] || 'Not found') + '\\n\u2022 Company: ' + (d['Hunter Company'] || d['Lead Company'] || 'Not found') + '\\n\u2022 Title: ' + (d['Hunter Title'] || 'Not found') + '\\n\u2022 Email: ' + (d['Hunter Email'] || d['Lead Contact'] || 'Not found') + '\\n\u2022 LinkedIn: ' + (d['Hunter LinkedIn'] || d['Contact LinkedIn'] || 'Not found') + '\\n\u2022 Website: ' + (d['Lead Website'] || 'Not found') + '\\n\u2b50 Lead Score: ' + d['Lead Score'] + '/10\\n\\n<' + d['Source URL'] + '|View Post>\\n\\n*\ud83d\udce7 Outreach Draft (Reddit DM):*\\n' + (d['outreach_draft'] || $json['Outreach Draft'] || ''); })() }}",
+        "text": "={{ (function() { const d = $('Parse Outreach Draft').item.json; const author = d['Author'] || d['author'] || ''; const dmLink = author ? 'https://reddit.com/message/compose?to=' + author : ''; return '🚨 *HIGH-VALUE LEAD* (Score: ' + d['Overall Score'] + ')\\n\\n*' + d['Title'] + '*\\nr/' + (d['Subreddit'] || '') + ' | Industry: ' + (d['Industry'] || 'Unknown') + '\\n\\n*AI Summary:*\\n' + (d['AI Summary'] || '') + '\\n\\n📊 Relevance: ' + d['Relevance Score'] + ' | Budget: ' + d['Budget Score'] + ' | Win Prob: ' + d['Win Probability'] + '\\n💰 Budget: ' + (d['Budget Mentioned'] || 'Not mentioned') + '\\n\\n*👤 Reddit Author*\\n• u/' + (author || 'unknown') + (dmLink ? '\\n• <' + dmLink + '|Send Reddit DM>' : '') + '\\n\\n*💼 Lead Contact (Hunter Enriched)*\\n• Name: ' + (d['Hunter Name'] || d['Lead Founder'] || 'Not found') + '\\n• Company: ' + (d['Hunter Company'] || d['Lead Company'] || 'Not found') + '\\n• Title: ' + (d['Hunter Title'] || 'Not found') + '\\n• Email: ' + (d['Hunter Email'] || d['Lead Contact'] || 'Not found') + '\\n• Website: ' + (d['Lead Website'] || 'Not found') + '\\n⭐ Lead Score: ' + d['Lead Score'] + '/10\\n\\n<' + d['Source URL'] + '|View Post>\\n\\n*📧 Outreach Draft (Reddit DM):*\\n' + (d['outreach_draft'] || $json['Outreach Draft'] || ''); })() }}",
         "otherOptions": {}
       },
       "id": "slack-instant",
@@ -658,7 +613,7 @@
       "parameters": {
         "fromEmail": "deshpane834@gmail.com",
         "toEmail": "deshpane834@gmail.com",
-        "subject": "=\ud83d\udea8 DealHunter [{{ $('Parse Outreach Draft').item.json['Overall Score'] }}] - {{ $('Parse Outreach Draft').item.json['Title'].substring(0,60) }}",
+        "subject": "=🚨 DealHunter [{{ $('Parse Outreach Draft').item.json['Overall Score'] }}] - {{ $('Parse Outreach Draft').item.json['Title'].substring(0,60) }}",
         "options": {
           "appendAttribution": false
         }
@@ -729,7 +684,7 @@
           "value": "#dealhunter-digest",
           "mode": "name"
         },
-        "text": "={{ ($json.overall_score >= 0.75 ? '\ud83d\udfe0 *MEDIUM-HIGH LEAD*' : '\ud83d\udfe1 *MEDIUM LEAD*') + ' (Score: ' + $json.overall_score + ')\\n' + ($json.source === 'linkedin' ? '\ud83d\udd17 LinkedIn' : $json.source?.startsWith('reddit') ? '\ud83e\udd16 Reddit r/' + $json.subreddit : '\ud83d\udfe4 HackerNews') + ' | ' + ($json.industry || 'Unknown industry') + '\\n\\n' + '*' + $json.title + '*\\n' + ($json.lead_company || $json.company_name ? '\ud83c\udfe2 ' + ($json.lead_company || $json.company_name) + '\\n' : '') + ($json.lead_website ? '\ud83c\udf10 ' + $json.lead_website + '\\n' : '') + '\\n' + ($json.ai_summary || '').substring(0, 200) + '\\n\\n' + '\ud83d\udcca Relevance: ' + $json.relevance_score + ' | Budget: ' + $json.budget_score + ' | Win Prob: ' + $json.win_probability + '\\n' + '<' + $json.source_url + '|View Post>' }}",
+        "text": "={{ ($json.overall_score >= 0.75 ? '🟠 *MEDIUM-HIGH LEAD*' : '🟡 *MEDIUM LEAD*') + ' (Score: ' + $json.overall_score + ')\\n' + ($json.source?.startsWith('reddit') ? '🤖 Reddit r/' + $json.subreddit : '🟤 HackerNews') + ' | ' + ($json.industry || 'Unknown industry') + '\\n\\n' + '*' + $json.title + '*\\n' + ($json.lead_company || $json.company_name ? '🏢 ' + ($json.lead_company || $json.company_name) + '\\n' : '') + ($json.lead_website ? '🌐 ' + $json.lead_website + '\\n' : '') + '\\n' + ($json.ai_summary || '').substring(0, 200) + '\\n\\n' + '📊 Relevance: ' + $json.relevance_score + ' | Budget: ' + $json.budget_score + ' | Win Prob: ' + $json.win_probability + '\\n' + '<' + $json.source_url + '|View Post>' }}",
         "otherOptions": {}
       },
       "id": "slack-digest",
@@ -794,7 +749,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst now = new Date();\nconst yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);\n\nconst leads = items\n  .filter(item => {\n    const discovered = new Date(item.json['Discovered At'] || item.json.discovered_at || 0);\n    const score = parseFloat(item.json['Overall Score'] || item.json.overall_score) || 0;\n    return discovered >= yesterday && score >= 0.70;\n  })\n  .sort((a, b) => {\n    const sa = parseFloat(a.json['Overall Score'] || a.json.overall_score) || 0;\n    const sb = parseFloat(b.json['Overall Score'] || b.json.overall_score) || 0;\n    return sb - sa;\n  })\n  .slice(0, 15);\n\nif (leads.length === 0) {\n  return [{ json: { count: 0, emailBody: '<p>No leads scored >= 0.70 in the last 24 hours.</p>', hasLeads: false } }];\n}\n\nconst rows = leads.map((item, idx) => {\n  const d = item.json;\n  const score = parseFloat(d['Overall Score'] || d.overall_score) || 0;\n  const title = d['Title'] || d.title || '';\n  const url   = d['Source URL'] || d.source_url || '';\n  const sub   = d['Subreddit'] || d.subreddit || '';\n  const summ  = d['AI Summary'] || d.ai_summary || '';\n  return `<tr><td>${idx+1}</td><td><a href=\"${url}\">${title}</a></td><td>r/${sub}</td><td><strong>${score.toFixed(2)}</strong></td><td>${summ.substring(0,120)}...</td></tr>`;\n}).join('');\n\nconst emailBody = `<h2>\ud83d\udcca DealHunter Daily Digest</h2>\n<p><strong>${leads.length} leads</strong> scored \u2265 0.70 in the last 24 hours</p>\n<table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%\">\n<tr><th>#</th><th>Title</th><th>Source</th><th>Score</th><th>Summary</th></tr>\n${rows}\n</table>\n<p><em>Generated ${now.toISOString()}</em></p>`;\n\n\n// Build source breakdown for Slack summary\nconst bySource = {};\nconst byTier = { hot: 0, medium: 0, low: 0 };\nitems.filter(item => {\n  const discovered = new Date(item.json['Discovered At'] || item.json.discovered_at || 0);\n  const score = parseFloat(item.json['Overall Score'] || item.json.overall_score) || 0;\n  return discovered >= yesterday && score >= 0.30;\n}).forEach(item => {\n  const src = (item.json['Source URL'] || item.json.source_url || '').includes('linkedin') ? 'LinkedIn'\n    : (item.json['Subreddit'] || item.json.subreddit) ? 'Reddit'\n    : 'HackerNews';\n  bySource[src] = (bySource[src] || 0) + 1;\n  const score = parseFloat(item.json['Overall Score'] || item.json.overall_score) || 0;\n  if (score >= 0.85) byTier.hot++;\n  else if (score >= 0.60) byTier.medium++;\n  else byTier.low++;\n});\nconst srcLine = Object.entries(bySource).map(([s, c]) => `${s}: ${c}`).join(' | ');\nconst slackSummary = `\ud83d\udcca *DealHunter Daily Report*\\n\\n`\n  + `*${byTier.hot + byTier.medium + byTier.low} total leads* scored \u2265 0.30 in last 24h\\n`\n  + `\ud83d\udd34 Hot (\u22650.85): ${byTier.hot} | \ud83d\udfe0 Medium (0.60-0.84): ${byTier.medium} | \ud83d\udfe1 Low (0.30-0.59): ${byTier.low}\\n`\n  + `\ud83d\udce1 Sources: ${srcLine || 'none'}\\n`\n  + `\ud83d\udce7 Top ${leads.length} leads (\u22650.70) sent to your email`;\n\nreturn [{ json: { count: leads.length, emailBody, hasLeads: true, slackSummary } }];"
+        "jsCode": "const items = $input.all();\nconst now = new Date();\nconst yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);\n\nconst leads = items\n  .filter(item => {\n    const discovered = new Date(item.json['Discovered At'] || item.json.discovered_at || 0);\n    const score = parseFloat(item.json['Overall Score'] || item.json.overall_score) || 0;\n    return discovered >= yesterday && score >= 0.70;\n  })\n  .sort((a, b) => {\n    const sa = parseFloat(a.json['Overall Score'] || a.json.overall_score) || 0;\n    const sb = parseFloat(b.json['Overall Score'] || b.json.overall_score) || 0;\n    return sb - sa;\n  })\n  .slice(0, 15);\n\nif (leads.length === 0) {\n  return [{ json: { count: 0, emailBody: '<p>No leads scored >= 0.70 in the last 24 hours.</p>', hasLeads: false } }];\n}\n\nconst rows = leads.map((item, idx) => {\n  const d = item.json;\n  const score = parseFloat(d['Overall Score'] || d.overall_score) || 0;\n  const title = d['Title'] || d.title || '';\n  const url   = d['Source URL'] || d.source_url || '';\n  const sub   = d['Subreddit'] || d.subreddit || '';\n  const summ  = d['AI Summary'] || d.ai_summary || '';\n  return `<tr><td>${idx+1}</td><td><a href=\"${url}\">${title}</a></td><td>r/${sub}</td><td><strong>${score.toFixed(2)}</strong></td><td>${summ.substring(0,120)}...</td></tr>`;\n}).join('');\n\nconst emailBody = `<h2>📊 DealHunter Daily Digest</h2>\n<p><strong>${leads.length} leads</strong> scored ≥ 0.70 in the last 24 hours</p>\n<table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%\">\n<tr><th>#</th><th>Title</th><th>Source</th><th>Score</th><th>Summary</th></tr>\n${rows}\n</table>\n<p><em>Generated ${now.toISOString()}</em></p>`;\n\n\n// Build source breakdown for Slack summary\nconst bySource = {};\nconst byTier = { hot: 0, medium: 0, low: 0 };\nitems.filter(item => {\n  const discovered = new Date(item.json['Discovered At'] || item.json.discovered_at || 0);\n  const score = parseFloat(item.json['Overall Score'] || item.json.overall_score) || 0;\n  return discovered >= yesterday && score >= 0.30;\n}).forEach(item => {\n  const src = (item.json['Subreddit'] || item.json.subreddit) ? 'Reddit' : 'HackerNews';\n  bySource[src] = (bySource[src] || 0) + 1;\n  const score = parseFloat(item.json['Overall Score'] || item.json.overall_score) || 0;\n  if (score >= 0.85) byTier.hot++;\n  else if (score >= 0.60) byTier.medium++;\n  else byTier.low++;\n});\nconst srcLine = Object.entries(bySource).map(([s, c]) => `${s}: ${c}`).join(' | ');\nconst slackSummary = `📊 *DealHunter Daily Report*\\n\\n`\n  + `*${byTier.hot + byTier.medium + byTier.low} total leads* scored ≥ 0.30 in last 24h\\n`\n  + `🔴 Hot (≥0.85): ${byTier.hot} | 🟠 Medium (0.60-0.84): ${byTier.medium} | 🟡 Low (0.30-0.59): ${byTier.low}\\n`\n  + `📡 Sources: ${srcLine || 'none'}\\n`\n  + `📧 Top ${leads.length} leads (≥0.70) sent to your email`;\n\nreturn [{ json: { count: leads.length, emailBody, hasLeads: true, slackSummary } }];"
       },
       "id": "build-digest",
       "name": "Build Daily Digest Email",
@@ -841,7 +796,7 @@
       "parameters": {
         "fromEmail": "deshpane834@gmail.com",
         "toEmail": "deshpane834@gmail.com",
-        "subject": "=\ud83d\udcca DealHunter Daily Digest - {{ $json.count }} New Leads",
+        "subject": "=📊 DealHunter Daily Digest - {{ $json.count }} New Leads",
         "options": {
           "appendAttribution": false
         }
@@ -867,7 +822,7 @@
         "operation": "send",
         "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
         "recipientPhoneNumber": "={{ $env.WHATSAPP_RECIPIENT_NUMBER }}",
-        "textBody": "=\ud83d\udcca *DealHunter Daily Digest*\n\n{{ $json.count }} leads scored \u2265 0.70 in the last 24 hours.\n\nCheck your email (deshpane834@gmail.com) for the full report.\n\n_Generated: {{ new Date().toISOString() }}_",
+        "textBody": "=📊 *DealHunter Daily Digest*\n\n{{ $json.count }} leads scored ≥ 0.70 in the last 24 hours.\n\nCheck your email (deshpane834@gmail.com) for the full report.\n\n_Generated: {{ new Date().toISOString() }}_",
         "additionalFields": {}
       },
       "id": "whatsapp-digest",
@@ -1082,7 +1037,7 @@
                 "operation": "gte"
               },
               "leftValue": "={{ $json.overall_score }}",
-              "rightValue": 0.0
+              "rightValue": 0
             }
           ],
           "combinator": "and"
@@ -1134,7 +1089,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const hunterResp = $input.item.json;\nconst original = $('Check - Has Lead Info').item.json;\n\nconst emails = hunterResp.data?.emails || [];\nconst priority = ['ceo','founder','co-founder','cto','owner','president','vp','director'];\n\nlet person = emails.find(e =>\n  priority.some(t => (e.position || '').toLowerCase().includes(t))\n) || emails[0] || null;\n\nreturn [{ json: {\n  ...original,\n  hunter_name:     person ? `${person.first_name || ''} ${person.last_name || ''}`.trim() : '',\n  hunter_email:    person?.value || '',\n  hunter_linkedin: person?.linkedin || '',\n  hunter_title:    person?.position || '',\n  hunter_company:  hunterResp.data?.organization || original.lead_company || '',\n}}];"
+        "jsCode": "const hunterResp = $input.item.json;\nconst original = $('Check - Has Lead Info').item.json;\n\nconst emails = hunterResp.data?.emails || [];\nconst priority = ['ceo','founder','co-founder','cto','owner','president','vp','director'];\n\nlet person = emails.find(e =>\n  priority.some(t => (e.position || '').toLowerCase().includes(t))\n) || emails[0] || null;\n\nreturn [{ json: {\n  ...original,\n  hunter_name:     person ? `${person.first_name || ''} ${person.last_name || ''}`.trim() : '',\n  hunter_email:    person?.value || '',\n  hunter_title:    person?.position || '',\n  hunter_company:  hunterResp.data?.organization || original.lead_company || '',\n}}];"
       },
       "id": "parse-hunter",
       "name": "Parse Hunter Response",
@@ -1158,196 +1113,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Store raw Reddit items for later combination\nconst staticData = $getWorkflowStaticData('global');\nstaticData.redditRaw = $input.all().map(item => item.json);\n\nreturn [{ json: {\n  searchQueries: [\n    'looking for software development company AI',\n    'we need to automate our business process custom software',\n    'outgrew no-code tool need custom dev',\n    'hiring development agency enterprise AI',\n    'building AI product need engineering team',\n    'data pipeline automation company',\n    'computer vision AI solution for manufacturing',\n    'enterprise AI integration struggling with',\n  ],\n  // maxItems set as Apify URL param instead (actor ignores body field)\n}}];"
-      },
-      "id": "store-reddit-start-upwork",
-      "name": "Store Reddit & Start LinkedIn",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        400,
-        -320
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ 'https://api.apify.com/v2/acts/buIWk2uOUzTmcLsuB/runs?token=' + $env.APIFY_API_TOKEN + '&memory=256&maxItems=0' }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ \"searchQueries\": $json.searchQueries }) }}",
-        "options": {
-          "timeout": 30000
-        }
-      },
-      "id": "upwork-start-run",
-      "name": "LinkedIn - Start Run",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        608,
-        -320
-      ],
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "upwork-run-id",
-              "name": "linkedinRunId",
-              "type": "string",
-              "value": "={{ $json.data.id }}"
-            },
-            {
-              "id": "upwork-dataset-id",
-              "name": "linkedinDatasetId",
-              "type": "string",
-              "value": "={{ $json.data.defaultDatasetId }}"
-            },
-            {
-              "id": "poll-attempt",
-              "name": "pollAttempt",
-              "type": "number",
-              "value": "=0"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "store-upwork-run-id",
-      "name": "Store LinkedIn Run ID",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        608,
-        -528
-      ]
-    },
-    {
-      "parameters": {
-        "amount": 20
-      },
-      "id": "upwork-wait-poll",
-      "name": "Wait - LinkedIn Poll (20s)",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        400,
-        -528
-      ],
-      "webhookId": "b7c2d3e4-f5a6-7890-abcd-ef1234567890"
-    },
-    {
-      "parameters": {
-        "url": "={{ 'https://api.apify.com/v2/actor-runs/' + $json.linkedinRunId + '?token=' + $env.APIFY_API_TOKEN }}",
-        "options": {}
-      },
-      "id": "apify-check-upwork-status",
-      "name": "Apify - Check LinkedIn Status",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        800,
-        -528
-      ],
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": false,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "upwork-succeeded",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              },
-              "leftValue": "={{ $json.data.status }}",
-              "rightValue": "SUCCEEDED"
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "upwork-run-done",
-      "name": "LinkedIn Run Complete?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        800,
-        -320
-      ]
-    },
-    {
-      "parameters": {
-        "url": "={{ 'https://api.apify.com/v2/datasets/' + $json.data?.defaultDatasetId + '/items?token=' + $env.APIFY_API_TOKEN + '&limit=50&clean=true' }}",
-        "options": {}
-      },
-      "id": "fetch-upwork-results",
-      "name": "Apify - Fetch LinkedIn Results",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1008,
-        -320
-      ]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "keep-linkedin-run-id",
-              "name": "linkedinRunId",
-              "type": "string",
-              "value": "={{ $json.data?.id || $json.linkedinRunId }}"
-            },
-            {
-              "id": "keep-linkedin-dataset-id",
-              "name": "linkedinDatasetId",
-              "type": "string",
-              "value": "={{ $json.data?.defaultDatasetId || $json.linkedinDatasetId }}"
-            },
-            {
-              "id": "keep-poll-attempt",
-              "name": "pollAttempt",
-              "type": "number",
-              "value": "={{ ($json.pollAttempt || 0) + 1 }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "keep-upwork-run-id",
-      "name": "Keep LinkedIn Run ID",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        1008,
-        -528
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Retrieve stored Reddit raw items\nconst staticData = $getWorkflowStaticData('global');\nconst redditRaw = staticData.redditRaw || [];\n\n// Get LinkedIn raw items \u2014 check if this run was skipped/failed\nconst inputItems = $input.all();\nlet linkedinRaw = [];\nconst wasSkipped = staticData.linkedinSkipped || (inputItems[0]?.json?._linkedinSkipped === true);\nif (!wasSkipped) {\n  linkedinRaw = inputItems.map(i => ({ ...i.json, _source: 'linkedin' }));\n}\n\n// Fetch HN stories via Algolia API (last 48h) \u2014 parallel with timeout\nconst hnQueries = [\n  'AI automation developer hiring',\n  'machine learning custom software build',\n  'SaaS enterprise automation engineer',\n  'enterprise software build custom',\n];\nconst since = Math.floor((Date.now() - 48 * 3600 * 1000) / 1000);\n\nconst withTimeout = (promise, ms) =>\n  Promise.race([\n    promise,\n    new Promise((_, reject) => setTimeout(() => reject(new Error('HN timeout')), ms)),\n  ]);\n\nconst hnResults = await Promise.allSettled(\n  hnQueries.map(q =>\n    withTimeout(\n      this.helpers.httpRequest({\n        method: 'GET',\n        url: `https://hn.algolia.com/api/v1/search_by_date?query=${encodeURIComponent(q)}&tags=story&hitsPerPage=30&numericFilters=created_at_i>${since}`,\n      }),\n      8000\n    )\n  )\n);\n\nconst seenHN = new Set();\nconst hnRaw = [];\nfor (const result of hnResults) {\n  if (result.status !== 'fulfilled') continue;\n  for (const hit of (result.value.hits || [])) {\n    if (!hit.title || seenHN.has(hit.objectID)) continue;\n    seenHN.add(hit.objectID);\n    const storyText = (hit.story_text || '').replace(/<[^>]*>/g, '').trim();\n    const description = storyText\n      ? storyText.substring(0, 3000)\n      : (hit.url ? `External link: ${hit.url}` : '');\n    hnRaw.push({ ...hit, _source: 'hackernews', _hn_description: description });\n  }\n}\n\n// Clear static data\ndelete staticData.redditRaw;\ndelete staticData.linkedinSkipped;\ndelete staticData.linkedinSkipReason;\n\n// Combine all sources\nconst allRaw = [\n  ...redditRaw.map(i => ({ ...i, _source: 'reddit' })),\n  ...linkedinRaw,\n  ...hnRaw,\n];\n\nif (allRaw.length === 0) {\n  return [{ json: { _noData: true, title: 'NO DATA', description: '', source: 'none', source_url: '', source_id: 'empty_run', posted_at: new Date().toISOString(), author: '', subreddit: '', upvotes: 0, num_comments: 0, flair_text: '', budget_text: '' } }];\n}\n\nreturn allRaw.map(item => ({ json: item }));"
+        "jsCode": "// Fetch HN stories via Algolia API (last 48h)\nconst hnQueries = [\n  'AI automation developer hiring',\n  'machine learning custom software build',\n  'SaaS enterprise automation engineer',\n  'enterprise software build custom',\n];\nconst since = Math.floor((Date.now() - 48 * 3600 * 1000) / 1000);\n\nconst withTimeout = (promise, ms) =>\n  Promise.race([\n    promise,\n    new Promise((_, reject) => setTimeout(() => reject(new Error('HN timeout')), ms)),\n  ]);\n\nconst hnResults = await Promise.allSettled(\n  hnQueries.map(q =>\n    withTimeout(\n      this.helpers.httpRequest({\n        method: 'GET',\n        url: `https://hn.algolia.com/api/v1/search_by_date?query=${encodeURIComponent(q)}&tags=story&hitsPerPage=30&numericFilters=created_at_i>${since}`,\n      }),\n      8000\n    )\n  )\n);\n\nconst seenHN = new Set();\nconst hnRaw = [];\nfor (const result of hnResults) {\n  if (result.status !== 'fulfilled') continue;\n  for (const hit of (result.value.hits || [])) {\n    if (!hit.title || seenHN.has(hit.objectID)) continue;\n    seenHN.add(hit.objectID);\n    const storyText = (hit.story_text || '').replace(/<[^>]*>/g, '').trim();\n    const description = storyText\n      ? storyText.substring(0, 3000)\n      : (hit.url ? `External link: ${hit.url}` : '');\n    hnRaw.push({ ...hit, _source: 'hackernews', _hn_description: description });\n  }\n}\n\n// Reddit items come directly from Apify - Fetch Results\nconst redditRaw = $input.all().map(i => ({ ...i.json, _source: 'reddit' }));\n\nconst allRaw = [...redditRaw, ...hnRaw];\n\nif (allRaw.length === 0) {\n  return [{ json: { _noData: true, title: 'NO DATA', description: '', source: 'none', source_url: '', source_id: 'empty_run', posted_at: new Date().toISOString(), author: '', subreddit: '', upvotes: 0, num_comments: 0, flair_text: '', budget_text: '' } }];\n}\n\nreturn allRaw.map(item => ({ json: item }));"
       },
       "id": "combine-all-fetch-hn",
       "name": "Combine All & Fetch HN",
@@ -1360,138 +1126,7 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": false,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "upwork-failed",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              },
-              "leftValue": "={{ $json.data.status }}",
-              "rightValue": "FAILED"
-            },
-            {
-              "id": "upwork-timeout",
-              "operator": {
-                "type": "number",
-                "operation": "gte"
-              },
-              "leftValue": "={{ $json.pollAttempt || 0 }}",
-              "rightValue": 15
-            },
-            {
-              "id": "upwork-aborted",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              },
-              "leftValue": "={{ $json.data.status }}",
-              "rightValue": "ABORTED"
-            }
-          ],
-          "combinator": "or"
-        },
-        "options": {}
-      },
-      "id": "upwork-abort-check",
-      "name": "LinkedIn Abort?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        2208,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// LinkedIn failed/timed out \u2014 store flag and return empty array\n// Combine All & Fetch HN will skip LinkedIn and continue with Reddit + HN\nconst staticData = $getWorkflowStaticData('global');\nstaticData.linkedinSkipped = true;\nstaticData.linkedinSkipReason = `Status: ${$json.data?.status || 'unknown'}, Attempts: ${$json.pollAttempt || 0}`;\nreturn [{ json: { _linkedinSkipped: true, linkedinItems: [] } }];"
-      },
-      "id": "upwork-skip-store",
-      "name": "LinkedIn Skip - Store Flag",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2400,
-        304
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// LinkedIn actor could not start (actor not found, API error, etc.)\nconst staticData = $getWorkflowStaticData('global');\nstaticData.linkedinSkipped = true;\nstaticData.linkedinSkipReason = 'Actor start failed: ' + ($json.error?.message || JSON.stringify($json).substring(0,200));\nreturn [{ json: { _linkedinSkipped: true, linkedinItems: [] } }];"
-      },
-      "id": "upwork-start-fail",
-      "name": "LinkedIn Failed - Skip",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1808,
-        560
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "let pollAttempt = 0;\ntry {\n  pollAttempt = $('Keep LinkedIn Run ID').first().json.pollAttempt ?? 0;\n} catch(e) {\n  try {\n    pollAttempt = $('Store LinkedIn Run ID').first().json.pollAttempt ?? 0;\n  } catch(e2) {\n    pollAttempt = 0;\n  }\n}\nreturn [{ json: { ...$input.item.json, pollAttempt } }];"
-      },
-      "id": "merge-poll-state",
-      "name": "Merge Poll State",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1056,
-        -528
-      ]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "sf-run-id",
-              "name": "linkedinRunId",
-              "type": "string",
-              "value": "={{ $json.linkedinRunId }}"
-            },
-            {
-              "id": "sf-dataset-id",
-              "name": "linkedinDatasetId",
-              "type": "string",
-              "value": "={{ $json.linkedinDatasetId }}"
-            },
-            {
-              "id": "sf-attempt",
-              "name": "pollAttempt",
-              "type": "number",
-              "value": "={{ ($json.pollAttempt || 0) + 1 }}"
-            },
-            {
-              "id": "sf-status",
-              "name": "data",
-              "type": "object",
-              "value": "={{ { status: 'RUNNING' } }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "upwork-status-fail",
-      "name": "Status Check Failed",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        2608,
-        608
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "return [{ json: {\n  ...$input.item.json,\n  hunter_name:     '',\n  hunter_email:    '',\n  hunter_linkedin: '',\n  hunter_title:    '',\n  hunter_company:  '',\n}}];"
+        "jsCode": "return [{ json: {\n  ...$input.item.json,\n  hunter_name:     '',\n  hunter_email:    '',\n  hunter_title:    '',\n  hunter_company:  '',\n}}];"
       },
       "id": "set-empty-hunter-fields",
       "name": "Set Empty Hunter Fields",
@@ -1530,8 +1165,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        848,
-        -112
+        896,
+        -240
       ]
     },
     {
@@ -1549,7 +1184,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const posts = $input.all().map(i => i.json);\nconst apiKey = $env.GOOGLE_AI_API_KEY;\nconst BATCH_SIZE = 5;\nconst BETWEEN_BATCH_DELAY_MS = 1500;\nconst MAX_RETRIES = 2;\nconst CALL_TIMEOUT_MS = 600000;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, SaaS products, data pipelines.\n\nIDEAL LEAD: Founder/CTO/SMB owner with a business PROBLEM needing custom software. Pain point posts are HIGH VALUE \u2014 they don't need to say \"looking for developer\".\n\nGOOD LEAD EXAMPLES:\n- \"compliance audits take weeks\" \u2192 needs automation software \u2192 HIGH\n- \"we outgrew our no-code tool\" \u2192 needs custom dev \u2192 HIGH\n- \"evaluating dev shops after bad outsourcing\" \u2192 MEDIUM\n- \"I built a meme AI\" \u2192 joke \u2192 0.0\n- Individual [For Hire] ad \u2192 0.0\n\nSCORE 4 DIMENSIONS (0.0\u20131.0):\n1. relevance_score: Does this business need software/AI built?\n   0.9+=clear AI/automation/enterprise need | 0.7-0.8=business pain point | 0.5-0.6=startup needs tech help | 0.0-0.2=irrelevant/joke/individual ad\n\n2. budget_score: 1.0=$100K+ | 0.8=$50-100K | 0.6=$25-50K | 0.4=$10-25K | 0.2=<$10K | 0.5=unknown but substantial scope\n\n3. urgency_score: 1.0=this week | 0.7=1 month | 0.4=3 months | 0.2=no timeline\n\n4. win_probability: 0.8+=agency/partner sought | 0.5-0.7=good fit vague | 0.2-0.4=wants freelancer | 0.0-0.1=no fit\n\nCOMPANY EXTRACTION \u2014 be aggressive, search every word:\n- Scan title AND description for any company name, product name, website URL, or organization\n- \"our app/platform/tool/startup\" = they have a company; infer a name from context clues\n- Any URL in the post becomes lead_website (extract domain only)\n- No name found? Return null for company_name. Never invent placeholder names.\n- lead_founder_name: use any person name mentioned in the post, else fall back to the Reddit author username`;\n\n// Arrow function so `this` is inherited from the n8n Code node context\nconst callGeminiWithRetry = async (prompt) => {\n  const body = {\n    contents: [{ parts: [{ text: prompt }] }],\n    generationConfig: { maxOutputTokens: 10000, temperature: 0.2, responseMimeType: 'application/json' },\n  };\n  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {\n    try {\n      const result = await Promise.race([\n        this.helpers.httpRequest({\n          method: 'POST',\n          url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n          body: body,\n        }),\n        new Promise((_, reject) => setTimeout(() => reject(new Error('call_timeout')), CALL_TIMEOUT_MS)),\n      ]);\n      return result;\n    } catch(e) {\n      const msg = String(e.message || '');\n      if (msg === 'call_timeout') throw new Error('call_timeout');\n      const is429 = msg.includes('429');\n      if (is429 && attempt < MAX_RETRIES - 1) {\n        await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 2000));\n        continue;\n      }\n      throw e;\n    }\n  }\n};\n\nfunction computeScores(s) {\n  const overall = Math.round((\n    (s.relevance_score||0)*0.35 + (s.budget_score||0)*0.25 +\n    (s.urgency_score||0)*0.15   + (s.win_probability||0)*0.25\n  ) * 100) / 100;\n  let alert_tier = 'discard';\n  if (overall >= 0.85) alert_tier = 'instant';\n  else if (overall >= 0.70) alert_tier = 'digest';\n  else if (overall >= 0.30) alert_tier = 'dashboard';\n  return { ...s, overall_score: overall, alert_tier };\n}\n\nfunction fallback(reason) {\n  return computeScores({\n    relevance_score: 0.1, budget_score: 0.1, urgency_score: 0.1, win_probability: 0.1,\n    summary: 'Parse error: ' + reason, industry: 'Unknown', tags: [], reasoning: reason,\n    estimated_budget_text: null, deadline_text: null, location: null, tech_stack: [],\n    company_name: null, contact_info: null, lead_founder_name: null, lead_website: null, reddit_author: null,\n  });\n}\n\nfunction buildItem(post, s) {\n  return { json: {\n    title:                 post.title,\n    description:           post.description,\n    source:                post.source,\n    source_url:            post.source_url,\n    source_id:             post.source_id,\n    posted_at:             post.posted_at,\n    author:                post.author,\n    subreddit:             post.subreddit,\n    upvotes:               post.upvotes,\n    num_comments:          post.num_comments,\n    relevance_score:       s.relevance_score,\n    budget_score:          s.budget_score,\n    urgency_score:         s.urgency_score,\n    win_probability:       s.win_probability,\n    overall_score:         s.overall_score,\n    ai_summary:            s.summary,\n    industry:              s.industry,\n    ai_tags:               s.tags || [],\n    ai_reasoning:          s.reasoning,\n    estimated_budget_text: s.estimated_budget_text,\n    deadline_text:         s.deadline_text,\n    location:              s.location,\n    tech_stack:            s.tech_stack || [],\n    company_name:          s.company_name,\n    contact_info:          s.contact_info,\n    lead_founder:          s.lead_founder_name || post.lead_founder || null,\n    lead_company:          s.company_name || post.lead_company || null,\n    lead_website:          s.lead_website || post.lead_website || null,\n    contact_linkedin:      post.contact_linkedin || null,\n    lead_contact:          s.contact_info || null,\n    lead_score:            Math.round(s.overall_score * 10),\n    alert_tier:            s.alert_tier,\n    discovered_at:         new Date().toISOString(),\n    status:                'new',\n    outreach_draft:        '',\n  }};\n}\n\nconst results = [];\nlet lastError = null;\nfor (let i = 0; i < posts.length; i += BATCH_SIZE) {\n  const batch = posts.slice(i, i + BATCH_SIZE);\n\n  const postsBlock = batch.map((p, idx) =>\n    'POST ' + (idx + 1) + ':\\nTitle: ' + p.title +\n    '\\nSource: ' + (p.source || '') +\n    '\\nAuthor: ' + (p.author || 'unknown') +\n    '\\nDescription: ' + (p.description || '').substring(0, 600)\n  ).join('\\n\\n---\\n\\n');\n\n  const schema = '{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"2-3 sentences\",\"industry\":\"FinTech/HealthTech/SaaS/Manufacturing/eCommerce/General\",\"tags\":[],\"reasoning\":\"brief\",\"estimated_budget_text\":null,\"deadline_text\":null,\"location\":null,\"tech_stack\":[],\"company_name\":null,\"contact_info\":null,\"lead_founder_name\":null,\"lead_website\":null,\"reddit_author\":null}';\n  const prompt = SYSTEM_PROMPT +\n    '\\n\\nScore ALL ' + batch.length + ' posts below. Return ONLY a valid JSON array with exactly ' +\n    batch.length + ' objects in the same order. No markdown, no explanation.\\nEach object must have: ' +\n    schema + '\\n\\n' + postsBlock;\n\n  let batchScores = null;\n  let debugSnippet = '';\n  try {\n    const respRaw = await callGeminiWithRetry(prompt);\n    const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n    const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n    debugSnippet = raw ? raw.substring(0, 300) : ('NO TEXT \u2014 resp keys: ' + JSON.stringify(Object.keys(resp || {})));\n    const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n    const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n    if (match) {\n      const parsed = JSON.parse(match[0]);\n      if (Array.isArray(parsed) && parsed.length > 0) {\n        // Accept partial results \u2014 pad missing items with fallback\n        batchScores = parsed;\n      }\n    }\n  } catch(e) { lastError = e.message; debugSnippet = 'EXCEPTION: ' + e.message; }\n\n  for (let j = 0; j < batch.length; j++) {\n    const s = batchScores && batchScores[j] ? computeScores(batchScores[j]) : fallback(debugSnippet || lastError || 'no response');\n    results.push(buildItem(batch[j], s));\n  }\n\n  if (i + BATCH_SIZE < posts.length) {\n    await new Promise(r => setTimeout(r, BETWEEN_BATCH_DELAY_MS));\n  }\n}\n\nreturn results;"
+        "jsCode": "const posts = $input.all().map(i => i.json);\nconst apiKey = $env.GOOGLE_AI_API_KEY;\nconst BATCH_SIZE = 5;\nconst BETWEEN_BATCH_DELAY_MS = 1500;\nconst MAX_RETRIES = 2;\nconst CALL_TIMEOUT_MS = 600000;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, SaaS products, data pipelines.\n\nIDEAL LEAD: Founder/CTO/SMB owner with a business PROBLEM needing custom software. Pain point posts are HIGH VALUE — they don't need to say \"looking for developer\".\n\nGOOD LEAD EXAMPLES:\n- \"compliance audits take weeks\" → needs automation software → HIGH\n- \"we outgrew our no-code tool\" → needs custom dev → HIGH\n- \"evaluating dev shops after bad outsourcing\" → MEDIUM\n- \"I built a meme AI\" → joke → 0.0\n- Individual [For Hire] ad → 0.0\n\nSCORE 4 DIMENSIONS (0.0–1.0):\n1. relevance_score: Does this business need software/AI built?\n   0.9+=clear AI/automation/enterprise need | 0.7-0.8=business pain point | 0.5-0.6=startup needs tech help | 0.0-0.2=irrelevant/joke/individual ad\n\n2. budget_score: 1.0=$100K+ | 0.8=$50-100K | 0.6=$25-50K | 0.4=$10-25K | 0.2=<$10K | 0.5=unknown but substantial scope\n\n3. urgency_score: 1.0=this week | 0.7=1 month | 0.4=3 months | 0.2=no timeline\n\n4. win_probability: 0.8+=agency/partner sought | 0.5-0.7=good fit vague | 0.2-0.4=wants freelancer | 0.0-0.1=no fit\n\nCOMPANY EXTRACTION — be aggressive, search every word:\n- Scan title AND description for any company name, product name, website URL, or organization\n- \"our app/platform/tool/startup\" = they have a company; infer a name from context clues\n- Any URL in the post becomes lead_website (extract domain only)\n- No name found? Return null for company_name. Never invent placeholder names.\n- lead_founder_name: use any person name mentioned in the post, else fall back to the Reddit author username`;\n\n// Arrow function so `this` is inherited from the n8n Code node context\nconst callGeminiWithRetry = async (prompt) => {\n  const body = {\n    contents: [{ parts: [{ text: prompt }] }],\n    generationConfig: { maxOutputTokens: 10000, temperature: 0.2, responseMimeType: 'application/json' },\n  };\n  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {\n    try {\n      const result = await Promise.race([\n        this.helpers.httpRequest({\n          method: 'POST',\n          url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n          body: body,\n        }),\n        new Promise((_, reject) => setTimeout(() => reject(new Error('call_timeout')), CALL_TIMEOUT_MS)),\n      ]);\n      return result;\n    } catch(e) {\n      const msg = String(e.message || '');\n      if (msg === 'call_timeout') throw new Error('call_timeout');\n      const is429 = msg.includes('429');\n      if (is429 && attempt < MAX_RETRIES - 1) {\n        await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 2000));\n        continue;\n      }\n      throw e;\n    }\n  }\n};\n\nfunction computeScores(s) {\n  const overall = Math.round((\n    (s.relevance_score||0)*0.35 + (s.budget_score||0)*0.25 +\n    (s.urgency_score||0)*0.15   + (s.win_probability||0)*0.25\n  ) * 100) / 100;\n  let alert_tier = 'discard';\n  if (overall >= 0.85) alert_tier = 'instant';\n  else if (overall >= 0.70) alert_tier = 'digest';\n  else if (overall >= 0.30) alert_tier = 'dashboard';\n  return { ...s, overall_score: overall, alert_tier };\n}\n\nfunction fallback(reason) {\n  return computeScores({\n    relevance_score: 0.1, budget_score: 0.1, urgency_score: 0.1, win_probability: 0.1,\n    summary: 'Parse error: ' + reason, industry: 'Unknown', tags: [], reasoning: reason,\n    estimated_budget_text: null, deadline_text: null, location: null, tech_stack: [],\n    company_name: null, contact_info: null, lead_founder_name: null, lead_website: null, reddit_author: null,\n  });\n}\n\nfunction buildItem(post, s) {\n  return { json: {\n    title:                 post.title,\n    description:           post.description,\n    source:                post.source,\n    source_url:            post.source_url,\n    source_id:             post.source_id,\n    posted_at:             post.posted_at,\n    author:                post.author,\n    subreddit:             post.subreddit,\n    upvotes:               post.upvotes,\n    num_comments:          post.num_comments,\n    relevance_score:       s.relevance_score,\n    budget_score:          s.budget_score,\n    urgency_score:         s.urgency_score,\n    win_probability:       s.win_probability,\n    overall_score:         s.overall_score,\n    ai_summary:            s.summary,\n    industry:              s.industry,\n    ai_tags:               s.tags || [],\n    ai_reasoning:          s.reasoning,\n    estimated_budget_text: s.estimated_budget_text,\n    deadline_text:         s.deadline_text,\n    location:              s.location,\n    tech_stack:            s.tech_stack || [],\n    company_name:          s.company_name,\n    contact_info:          s.contact_info,\n    lead_founder:          s.lead_founder_name || post.lead_founder || null,\n    lead_company:          s.company_name || post.lead_company || null,\n    lead_website:          s.lead_website || post.lead_website || null,\n    lead_contact:          s.contact_info || null,\n    lead_score:            Math.round(s.overall_score * 10),\n    alert_tier:            s.alert_tier,\n    discovered_at:         new Date().toISOString(),\n    status:                'new',\n    outreach_draft:        '',\n  }};\n}\n\nconst results = [];\nlet lastError = null;\nfor (let i = 0; i < posts.length; i += BATCH_SIZE) {\n  const batch = posts.slice(i, i + BATCH_SIZE);\n\n  const postsBlock = batch.map((p, idx) =>\n    'POST ' + (idx + 1) + ':\\nTitle: ' + p.title +\n    '\\nSource: ' + (p.source || '') +\n    '\\nAuthor: ' + (p.author || 'unknown') +\n    '\\nDescription: ' + (p.description || '').substring(0, 600)\n  ).join('\\n\\n---\\n\\n');\n\n  const schema = '{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"2-3 sentences\",\"industry\":\"FinTech/HealthTech/SaaS/Manufacturing/eCommerce/General\",\"tags\":[],\"reasoning\":\"brief\",\"estimated_budget_text\":null,\"deadline_text\":null,\"location\":null,\"tech_stack\":[],\"company_name\":null,\"contact_info\":null,\"lead_founder_name\":null,\"lead_website\":null,\"reddit_author\":null}';\n  const prompt = SYSTEM_PROMPT +\n    '\\n\\nScore ALL ' + batch.length + ' posts below. Return ONLY a valid JSON array with exactly ' +\n    batch.length + ' objects in the same order. No markdown, no explanation.\\nEach object must have: ' +\n    schema + '\\n\\n' + postsBlock;\n\n  let batchScores = null;\n  let debugSnippet = '';\n  try {\n    const respRaw = await callGeminiWithRetry(prompt);\n    const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n    const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n    debugSnippet = raw ? raw.substring(0, 300) : ('NO TEXT — resp keys: ' + JSON.stringify(Object.keys(resp || {})));\n    const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n    const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n    if (match) {\n      const parsed = JSON.parse(match[0]);\n      if (Array.isArray(parsed) && parsed.length > 0) {\n        // Accept partial results — pad missing items with fallback\n        batchScores = parsed;\n      }\n    }\n  } catch(e) { lastError = e.message; debugSnippet = 'EXCEPTION: ' + e.message; }\n\n  for (let j = 0; j < batch.length; j++) {\n    const s = batchScores && batchScores[j] ? computeScores(batchScores[j]) : fallback(debugSnippet || lastError || 'no response');\n    results.push(buildItem(batch[j], s));\n  }\n\n  if (i + BATCH_SIZE < posts.length) {\n    await new Promise(r => setTimeout(r, BETWEEN_BATCH_DELAY_MS));\n  }\n}\n\nreturn results;"
       },
       "id": "gemini-batch-score",
       "name": "Gemini - Batch Score & Parse",
@@ -1622,7 +1257,7 @@
                 "operation": "gte"
               },
               "leftValue": "={{ $json.overall_score }}",
-              "rightValue": 0.0
+              "rightValue": 0
             }
           ],
           "combinator": "and"
@@ -1730,14 +1365,14 @@
     },
     "Loop Over Items": {
       "main": [
+        [],
         [
           {
             "node": "Wait - Process Rate Limit",
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
     "Wait - Process Rate Limit": {
@@ -1765,6 +1400,11 @@
     "Parse Outreach Draft": {
       "main": [
         [
+          {
+            "node": "Slack - Instant Alert",
+            "type": "main",
+            "index": 0
+          },
           {
             "node": "Update Sheet - Add Outreach Draft",
             "type": "main",
@@ -1933,7 +1573,7 @@
       "main": [
         [
           {
-            "node": "Store Reddit & Start LinkedIn",
+            "node": "Combine All & Fetch HN",
             "type": "main",
             "index": 0
           }
@@ -2042,182 +1682,11 @@
         ]
       ]
     },
-    "Store Reddit & Start LinkedIn": {
-      "main": [
-        [
-          {
-            "node": "LinkedIn - Start Run",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LinkedIn - Start Run": {
-      "main": [
-        [
-          {
-            "node": "Store LinkedIn Run ID",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "LinkedIn Failed - Skip",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Store LinkedIn Run ID": {
-      "main": [
-        [
-          {
-            "node": "Wait - LinkedIn Poll (20s)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait - LinkedIn Poll (20s)": {
-      "main": [
-        [
-          {
-            "node": "Apify - Check LinkedIn Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Apify - Check LinkedIn Status": {
-      "main": [
-        [
-          {
-            "node": "Merge Poll State",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Status Check Failed",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge Poll State": {
-      "main": [
-        [
-          {
-            "node": "LinkedIn Run Complete?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LinkedIn Run Complete?": {
-      "main": [
-        [
-          {
-            "node": "Apify - Fetch LinkedIn Results",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "LinkedIn Abort?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Keep LinkedIn Run ID": {
-      "main": [
-        [
-          {
-            "node": "Wait - LinkedIn Poll (20s)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Apify - Fetch LinkedIn Results": {
-      "main": [
-        [
-          {
-            "node": "Combine All & Fetch HN",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Combine All & Fetch HN": {
       "main": [
         [
           {
             "node": "Normalize to RawOpportunity",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LinkedIn Abort?": {
-      "main": [
-        [
-          {
-            "node": "LinkedIn Skip - Store Flag",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Keep LinkedIn Run ID",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LinkedIn Skip - Store Flag": {
-      "main": [
-        [
-          {
-            "node": "Combine All & Fetch HN",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LinkedIn Failed - Skip": {
-      "main": [
-        [
-          {
-            "node": "Combine All & Fetch HN",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Status Check Failed": {
-      "main": [
-        [
-          {
-            "node": "LinkedIn Run Complete?",
             "type": "main",
             "index": 0
           }
@@ -2310,7 +1779,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "42d35d9a-2b86-4aa2-b420-f5e7cb389ace",
+  "versionId": "4e0c24f2-7b4d-48b5-abc0-796ffe95bf06",
   "meta": {
     "instanceId": "bfa881661c018749d441660d36f63fdf552d02437db15de1ed54bb7a572d9e36",
     "templateCredsSetupCompleted": true
