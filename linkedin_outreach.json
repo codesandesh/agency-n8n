@@ -1,0 +1,659 @@
+{
+    "name": "DealHunter - Source: LinkedIn (Google Proxy)",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "hours",
+                            "hoursInterval": 4
+                        }
+                    ]
+                }
+            },
+            "id": "cron-li",
+            "name": "Cron - Every 4 Hours",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                -1008,
+                -208
+            ]
+        },
+        {
+            "parameters": {},
+            "id": "webhook-li",
+            "name": "Manual Trigger - On-Demand Outreach",
+            "type": "n8n-nodes-base.manualTrigger",
+            "typeVersion": 1,
+            "position": [
+                -1008,
+                208
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Exact keyword signals from DealHunter requirements doc\nconst queries = [\n  { q: 'site:linkedin.com/posts \"looking for a tech partner\"', type: 'linkedin_posts' },\n  { q: 'site:linkedin.com/posts \"need a development team\"', type: 'linkedin_posts' },\n  { q: 'site:linkedin.com/posts \"evaluating vendors\"', type: 'linkedin_posts' },\n  { q: 'site:linkedin.com/posts \"building MVP\"', type: 'linkedin_posts' },\n  { q: 'site:linkedin.com/posts \"looking for technical cofounder\"', type: 'linkedin_posts' },\n  { q: 'site:linkedin.com/posts \"RFP for software\"', type: 'linkedin_posts' },\n  { q: 'site:linkedin.com/posts \"need AI development\" OR \"need machine learning\"', type: 'linkedin_posts' },\n  { q: 'site:linkedin.com/posts \"outsource development\" OR \"looking for agency\"', type: 'linkedin_posts' },\n  { q: 'site:linkedin.com/posts \"need custom software\" OR \"outgrown no-code\"', type: 'linkedin_posts' },\n  { q: 'site:linkedin.com/posts \"computer vision\" OR \"automation\" \"looking for\"', type: 'linkedin_posts' },\n  { q: 'site:linkedin.com/jobs \"contract\" \"AI\" OR \"machine learning\" OR \"automation\"', type: 'linkedin_jobs' },\n  { q: 'site:linkedin.com/jobs \"freelance\" \"software development\" OR \"full stack\" OR \"python\"', type: 'linkedin_jobs' },\n  { q: 'site:linkedin.com/jobs \"project\" \"AI engineer\" OR \"ML engineer\" OR \"data engineer\"', type: 'linkedin_jobs' },\n];\nreturn queries.map(q => ({ json: q }));"
+            },
+            "id": "queries-li",
+            "name": "Build Search Queries",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -768,
+                -208
+            ]
+        },
+        {
+            "parameters": {
+                "url": "https://serpapi.com/search.json",
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "q",
+                            "value": "={{ $json.q }}"
+                        },
+                        {
+                            "name": "num",
+                            "value": "10"
+                        },
+                        {
+                            "name": "api_key",
+                            "value": "={{ $env.SERPAPI_KEY }}"
+                        },
+                        {
+                            "name": "engine",
+                            "value": "google"
+                        },
+                        {
+                            "name": "tbs",
+                            "value": "qdr:d"
+                        },
+                        {
+                            "name": "gl",
+                            "value": "us"
+                        },
+                        {
+                            "name": "hl",
+                            "value": "en"
+                        }
+                    ]
+                },
+                "options": {
+                    "timeout": 20000
+                }
+            },
+            "id": "serpapi-li",
+            "name": "SerpAPI - Google Search",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                -528,
+                -208
+            ],
+            "onError": "continueRegularOutput"
+        },
+        {
+            "parameters": {
+                "jsCode": "const skipKeywords = [\n  'for hire', 'logo design', 'seo services', 'social media manager',\n  'content writer', 'virtual assistant', 'data entry', 'graphic designer',\n  'video editor', 'copywriter', 'i am available', 'available for hire',\n  'seeking clients', 'my services'\n];\n\nconst results = [];\nconst seenInRun = new Set();\n\nfor (const item of $input.all()) {\n  const data = item.json;\n  if (!data || data.error) continue;\n\n  const organicResults = data.organic_results || [];\n  const queryType = data.search_parameters?.q?.includes('linkedin.com/jobs')\n    ? 'linkedin_jobs' : 'linkedin_posts';\n\n  for (const r of organicResults) {\n    if (!r.link) continue;\n    if (!r.link.includes('linkedin.com')) continue;\n\n    const isPost = r.link.includes('/posts/') || r.link.includes('/pulse/');\n    const isJob  = r.link.includes('/jobs/');\n    if (!isPost && !isJob) continue;\n\n    const id = 'li_' + (r.link || '').replace(/[^a-z0-9]/gi, '').substring(0, 80);\n    if (seenInRun.has(id)) continue;\n    seenInRun.add(id);\n\n    const title   = String(r.title   || '').substring(0, 500);\n    const snippet = String(r.snippet || '').replace(/<[^>]*>/g, '').substring(0, 3000);\n    if (!title) continue;\n\n    const fullText = (title + ' ' + snippet).toLowerCase();\n    if (skipKeywords.some(kw => fullText.includes(kw))) continue;\n\n    let author = '';\n    try {\n      const urlParts = r.link.split('/');\n      const inIdx = urlParts.indexOf('in');\n      if (inIdx > -1) author = urlParts[inIdx + 1] || '';\n      const companyIdx = urlParts.indexOf('company');\n      if (companyIdx > -1) author = urlParts[companyIdx + 1] || '';\n    } catch(e) {}\n\n    results.push({ json: {\n      title,\n      description: snippet,\n      source: queryType,\n      source_url: r.link,\n      source_id: id,\n      posted_at: (function(){ try { const dt = r.date ? new Date(r.date) : null; return dt && !isNaN(dt.getTime()) ? dt.toISOString() : new Date().toISOString(); } catch(e) { return new Date().toISOString(); } })(),\n      author: author.replace(/-/g, ' ').substring(0, 100),\n      subreddit: '',\n      upvotes: 0,\n      num_comments: 0,\n      flair_text: queryType === 'linkedin_jobs' ? 'Job/Contract' : 'Post',\n      budget_text: ''\n    }});\n  }\n}\n\nif (results.length === 0) return [];\nreturn results;"
+            },
+            "id": "normalize-li",
+            "name": "Normalize - LinkedIn Results",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -288,
+                -208
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const posts = $input.all().map(i => i.json);\nif (posts.length === 0) return [];\n\nconst apiKey = $env.GOOGLE_AI_API_KEY;\nconst BATCH_SIZE = 5;\nconst BETWEEN_BATCH_DELAY_MS = 1500;\nconst MAX_RETRIES = 2;\nconst CALL_TIMEOUT_MS = 120000;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, SaaS products, data pipelines.\n\nThese posts are from LinkedIn — found via Google search using site:linkedin.com.\n\nIDEAL LEAD: Someone actively looking for a tech partner, dev team, or AI implementation help.\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 0.9+=clearly seeking AI/software partner | 0.7=business pain | 0.5=vague tech need | 0.0=irrelevant\n2. budget_score: 1.0=$100K+ | 0.8=$50-100K | 0.6=$25-50K | 0.5=unknown but enterprise context | 0.2=small/unclear\n3. urgency_score: 1.0=this week | 0.7=1 month | 0.4=exploring | 0.2=no urgency\n4. win_probability: 0.8+=explicitly seeking agency/partner | 0.5=good fit unclear | 0.3=wants freelancer | 0.1=no fit\n\nCOMPANY EXTRACTION: Extract company name, founder name, website from LinkedIn URL or snippet. Never invent.`;\n\nconst callGeminiWithRetry = async (prompt) => {\n  const body = {\n    contents: [{ parts: [{ text: prompt }] }],\n    generationConfig: { maxOutputTokens: 10000, temperature: 0.2, responseMimeType: 'application/json' },\n  };\n  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {\n    try {\n      const result = await Promise.race([\n        this.helpers.httpRequest({\n          method: 'POST',\n          url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n          body,\n        }),\n        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), CALL_TIMEOUT_MS)),\n      ]);\n      return result;\n    } catch(e) {\n      if (String(e.message).includes('429') && attempt < MAX_RETRIES - 1) {\n        await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 2000));\n        continue;\n      }\n      throw e;\n    }\n  }\n};\n\nfunction computeScores(s) {\n  const overall = Math.round((\n    (s.relevance_score||0)*0.35 + (s.budget_score||0)*0.25 +\n    (s.urgency_score||0)*0.15   + (s.win_probability||0)*0.25\n  ) * 100) / 100;\n  let alert_tier = 'discard';\n  if (overall >= 0.85) alert_tier = 'instant';\n  else if (overall >= 0.70) alert_tier = 'digest';\n  else if (overall >= 0.30) alert_tier = 'dashboard';\n  return { ...s, overall_score: overall, alert_tier };\n}\n\nfunction fallback() {\n  return computeScores({ relevance_score:0.1,budget_score:0.1,urgency_score:0.1,win_probability:0.1,\n    summary:'Parse error',industry:'Unknown',tags:[],reasoning:'error',\n    estimated_budget_text:null,deadline_text:null,location:null,tech_stack:[],\n    company_name:null,contact_info:null,lead_founder_name:null,lead_website:null });\n}\n\nfunction buildItem(post, s) {\n  return { json: {\n    title:                 post.title,\n    description:           post.description,\n    source:                post.source,\n    source_url:            post.source_url,\n    source_id:             post.source_id,\n    posted_at:             post.posted_at,\n    author:                post.author,\n    subreddit:             '',\n    upvotes:               0,\n    num_comments:          0,\n    relevance_score:       s.relevance_score,\n    budget_score:          s.budget_score,\n    urgency_score:         s.urgency_score,\n    win_probability:       s.win_probability,\n    overall_score:         s.overall_score,\n    ai_summary:            s.summary,\n    industry:              s.industry,\n    ai_tags:               s.tags || [],\n    ai_reasoning:          s.reasoning,\n    estimated_budget_text: s.estimated_budget_text,\n    deadline_text:         s.deadline_text,\n    location:              s.location,\n    tech_stack:            s.tech_stack || [],\n    lead_founder:          s.lead_founder_name || null,\n    lead_company:          s.company_name || null,\n    lead_website:          s.lead_website || null,\n    lead_contact:          s.contact_info || null,\n    lead_score:            Math.round(s.overall_score * 10),\n    alert_tier:            s.alert_tier,\n    discovered_at:         new Date().toISOString(),\n    status:                'new',\n    outreach_draft:        '',\n    hunter_name:           '',\n    hunter_email:          '',\n    hunter_title:          '',\n    hunter_company:        ''\n  }};\n}\n\nconst results = [];\nfor (let i = 0; i < posts.length; i += BATCH_SIZE) {\n  const batch = posts.slice(i, i + BATCH_SIZE);\n  const postsBlock = batch.map((p, idx) =>\n    'POST ' + (idx+1) + ':\\nTitle: ' + p.title +\n    '\\nSource Type: ' + (p.source === 'linkedin_jobs' ? 'LinkedIn Job/Contract' : 'LinkedIn Post') +\n    '\\nURL: ' + p.source_url +\n    '\\nSnippet: ' + (p.description || '').substring(0, 600)\n  ).join('\\n\\n---\\n\\n');\n\n  const schema = '{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"2-3 sentences\",\"industry\":\"FinTech/HealthTech/SaaS/Manufacturing/General\",\"tags\":[],\"reasoning\":\"brief\",\"estimated_budget_text\":null,\"deadline_text\":null,\"location\":null,\"tech_stack\":[],\"company_name\":null,\"contact_info\":null,\"lead_founder_name\":null,\"lead_website\":null}';\n  const prompt = SYSTEM_PROMPT + '\\n\\nScore ALL ' + batch.length + ' posts. Return ONLY a valid JSON array with exactly ' + batch.length + ' objects. Each: ' + schema + '\\n\\n' + postsBlock;\n\n  let batchScores = null;\n  try {\n    const respRaw = await callGeminiWithRetry(prompt);\n    const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n    const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n    const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n    const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n    if (match) {\n      const parsed = JSON.parse(match[0]);\n      if (Array.isArray(parsed) && parsed.length > 0) batchScores = parsed;\n    }\n  } catch(e) {}\n\n  for (let j = 0; j < batch.length; j++) {\n    const s = batchScores && batchScores[j] ? computeScores(batchScores[j]) : fallback();\n    results.push(buildItem(batch[j], s));\n  }\n  if (i + BATCH_SIZE < posts.length) await new Promise(r => setTimeout(r, BETWEEN_BATCH_DELAY_MS));\n}\n\nreturn results;"
+            },
+            "id": "score-li",
+            "name": "Gemini - Batch Score & Parse",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -48,
+                -208
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "typeValidation": "loose",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "f",
+                            "operator": {
+                                "type": "number",
+                                "operation": "gte"
+                            },
+                            "leftValue": "={{ $json.overall_score }}",
+                            "rightValue": 0.3
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "id": "filter-li",
+            "name": "Filter - Score >= 0.30",
+            "type": "n8n-nodes-base.filter",
+            "typeVersion": 2.2,
+            "position": [
+                208,
+                -208
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "appendOrUpdate",
+                "documentId": {
+                    "__rl": true,
+                    "mode": "url",
+                    "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "mode": "name",
+                    "value": "Opportunities"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Source ID": "={{ $json.source_id }}",
+                        "Title": "={{ $json.title }}",
+                        "Subreddit": "={{ $json.subreddit }}",
+                        "Source URL": "={{ $json.source_url }}",
+                        "Posted At": "={{ $json.posted_at }}",
+                        "Discovered At": "={{ $json.discovered_at }}",
+                        "Author": "={{ $json.author }}",
+                        "Overall Score": "={{ $json.overall_score }}",
+                        "Relevance Score": "={{ $json.relevance_score }}",
+                        "Budget Score": "={{ $json.budget_score }}",
+                        "Urgency Score": "={{ $json.urgency_score }}",
+                        "Win Probability": "={{ $json.win_probability }}",
+                        "Alert Tier": "={{ $json.alert_tier }}",
+                        "Industry": "={{ $json.industry }}",
+                        "AI Summary": "={{ $json.ai_summary }}",
+                        "AI Tags": "={{ ($json.ai_tags||[]).join(', ') }}",
+                        "Tech Stack": "={{ ($json.tech_stack||[]).join(', ') }}",
+                        "Budget Mentioned": "={{ $json.estimated_budget_text }}",
+                        "Location": "={{ $json.location }}",
+                        "Upvotes": "={{ $json.upvotes }}",
+                        "Comments": "={{ $json.num_comments }}",
+                        "Status": "new",
+                        "AI Reasoning": "={{ $json.ai_reasoning }}",
+                        "Lead Founder": "={{ $json.lead_founder||'' }}",
+                        "Lead Company": "={{ $json.lead_company||'' }}",
+                        "Lead Website": "={{ $json.lead_website||'' }}",
+                        "Lead Contact": "={{ $json.lead_contact||'' }}",
+                        "Lead Score": "={{ $json.lead_score||'' }}",
+                        "Hunter Name": "={{ $json.hunter_name||'' }}",
+                        "Hunter Email": "={{ $json.hunter_email||'' }}",
+                        "Hunter Title": "={{ $json.hunter_title||'' }}",
+                        "Hunter Company": "={{ $json.hunter_company||'' }}"
+                    },
+                    "matchingColumns": [
+                        "Source ID"
+                    ],
+                    "schema": [
+                        {
+                            "id": "Source ID",
+                            "displayName": "Source ID",
+                            "required": false,
+                            "defaultMatch": true,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        }
+                    ],
+                    "attemptToConvertTypes": false,
+                    "convertFieldsToString": false
+                },
+                "options": {}
+            },
+            "id": "sheet-li",
+            "name": "Append to Google Sheet",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.6,
+            "position": [
+                448,
+                -208
+            ],
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "HopOeXjaGgSku8RO",
+                    "name": "Google Sheets account"
+                }
+            },
+            "continueOnFail": true
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "a",
+                            "operator": {
+                                "type": "number",
+                                "operation": "gte"
+                            },
+                            "leftValue": "={{ $json.overall_score }}",
+                            "rightValue": 0.6
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "id": "check-alert-li",
+            "name": "Check Score >= 0.85",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                336,
+                176
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.anthropic.com/v1/messages",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "x-api-key",
+                            "value": "={{ $env.ANTHROPIC_API_KEY }}"
+                        },
+                        {
+                            "name": "anthropic-version",
+                            "value": "2023-06-01"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({\n  \"model\": \"claude-opus-4-5\",\n  \"max_tokens\": 1024,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": `You are writing as Ujjwal Roy, CEO of ScaleBuild AI (Junkiri Labs LLC).\\n\\nLEAD:\\nTitle: ${$json.title || $json['Title'] || ''}\\nSummary: ${$json.ai_summary || $json['AI Summary'] || ''}\\nCompany: ${$json.lead_company || $json['Lead Company'] || 'Unknown'}\\nIndustry: ${$json.industry || $json['Industry'] || 'Unknown'}\\nTech Requirements: ${($json.tech_stack || []).join(', ') || $json['Tech Stack'] || 'Not specified'}\\nRelevant ScaleBuild Capabilities: Custom AI/ML models, computer vision for manufacturing and security, enterprise workflow automation, full-stack SaaS development, data pipelines\\n\\nWrite a LinkedIn outreach message following this EXACT structure:\\n\\n1. HOOK (1-2 sentences): Reference their specific pain point or need directly. Make it personal and precise.\\n2. CREDENTIALS (2-3 sentences): Mention ScaleBuild AI builds custom AI/ML models, computer vision systems for manufacturing and security, and enterprise automation. Reference ex-Intel/IBM/Micron engineering background and shipped production systems.\\n3. SOFT CTA (1 sentence): Low-pressure ask — happy to connect or have a quick conversation if relevant.\\n\\nRULES:\\n- 150-200 words total\\n- Tone: direct, confident, no fluff, human-sounding, like one founder to another\\n- NO em dashes\\n- NO exclamation marks\\n- Do not start with \"I hope\" or generic openers\\n\\nSign-off:\\nUjjwal Roy\\nCEO, ScaleBuild AI\\n\\nReturn ONLY the message text. No markdown. No subject line.`\n  }]\n}) }}",
+                "options": {
+                    "timeout": 30000
+                }
+            },
+            "id": "claude-outreach-li",
+            "name": "Claude - Generate Outreach",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                688,
+                128
+            ],
+            "continueOnFail": true
+        },
+        {
+            "parameters": {
+                "jsCode": "const claudeResp = $input.item.json;\nconst original = $('Check Score >= 0.85').item.json;\n// Claude response format: content[0].text\nconst draft = claudeResp.content?.[0]?.text?.trim() || 'Outreach generation failed';\nreturn [{ json: { ...original, outreach_draft: draft } }];"
+            },
+            "id": "parse-outreach-li",
+            "name": "Parse Outreach Draft",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                928,
+                128
+            ]
+        },
+        {
+            "parameters": {
+                "select": "channel",
+                "channelId": {
+                    "__rl": true,
+                    "value": "#dealhunter-alerts",
+                    "mode": "name"
+                },
+                "text": "={{ (function(){\n  const d = $('Parse Outreach Draft').item.json;\n  const score = d.overall_score || d['Overall Score'] || 0;\n  const sourceLabel = d.source === 'linkedin_jobs' ? 'LinkedIn Job/Contract' : 'LinkedIn Post';\n  return '🚨 *' + sourceLabel.toUpperCase() + ' HIGH-VALUE LEAD* (Score: ' + score + ')\\n\\n' +\n    '*' + (d.title || d['Title']) + '*\\n' +\n    (d.lead_company || d['Lead Company'] ? '🏢 ' + (d.lead_company || d['Lead Company']) + '\\n' : '') +\n    'Industry: ' + (d.industry || d['Industry'] || 'Unknown') + '\\n\\n' +\n    '*AI Summary:*\\n' + (d.ai_summary || d['AI Summary'] || '') + '\\n\\n' +\n    '📊 Relevance: ' + (d.relevance_score || d['Relevance Score']) + ' | Budget: ' + (d.budget_score || d['Budget Score']) + ' | Win Prob: ' + (d.win_probability || d['Win Probability']) + '\\n' +\n    '💰 Budget: ' + (d.estimated_budget_text || d['Budget Mentioned'] || 'Not mentioned') + '\\n\\n' +\n    '<' + (d.source_url || d['Source URL']) + '|View on LinkedIn>\\n\\n' +\n    '*💬 LinkedIn Outreach Message (Claude):*\\n' + (d.outreach_draft || '');\n})() }}",
+                "otherOptions": {}
+            },
+            "id": "slack-li",
+            "name": "Slack - Instant Alert",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.2,
+            "position": [
+                1168,
+                -48
+            ],
+            "webhookId": "b221b58c-acdf-48e8-a77d-1f2820f1dcee",
+            "credentials": {
+                "slackApi": {
+                    "id": "12yhiaMJlTGLSK74",
+                    "name": "Slack account"
+                }
+            },
+            "continueOnFail": true
+        },
+        {
+            "parameters": {
+                "fromEmail": "deshpane834@gmail.com",
+                "toEmail": "deshpane834@gmail.com",
+                "subject": "=🔗 LinkedIn Lead [{{ $('Parse Outreach Draft').item.json['overall_score'] || $('Parse Outreach Draft').item.json['Overall Score'] }}] - {{ ($('Parse Outreach Draft').item.json['title'] || $('Parse Outreach Draft').item.json['Title'] || '').substring(0,60) }}",
+                "options": {
+                    "appendAttribution": false
+                }
+            },
+            "id": "email-li",
+            "name": "Email - Instant Alert",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 2.1,
+            "position": [
+                1168,
+                128
+            ],
+            "webhookId": "2760fafa-5075-44ec-8c6c-dfe465b1b6b0",
+            "credentials": {
+                "smtp": {
+                    "id": "FNx0wyiO1TAuFQu3",
+                    "name": "SMTP account"
+                }
+            },
+            "continueOnFail": true
+        },
+        {
+            "parameters": {
+                "operation": "appendOrUpdate",
+                "documentId": {
+                    "__rl": true,
+                    "mode": "url",
+                    "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "mode": "name",
+                    "value": "Opportunities"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Source ID": "={{ $json.source_id || $json['Source ID'] }}",
+                        "Outreach Draft": "={{ $json.outreach_draft }}",
+                        "Status": "outreach_ready"
+                    },
+                    "matchingColumns": [
+                        "Source ID"
+                    ],
+                    "schema": [
+                        {
+                            "id": "Source ID",
+                            "displayName": "Source ID",
+                            "required": false,
+                            "defaultMatch": true,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        }
+                    ],
+                    "attemptToConvertTypes": false,
+                    "convertFieldsToString": false
+                },
+                "options": {}
+            },
+            "id": "update-sheet-li",
+            "name": "Update Sheet - Outreach Draft",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.6,
+            "position": [
+                1168,
+                288
+            ],
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "HopOeXjaGgSku8RO",
+                    "name": "Google Sheets account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "documentId": {
+                    "__rl": true,
+                    "mode": "url",
+                    "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": 579672180,
+                    "mode": "list",
+                    "cachedResultName": "Opportunities",
+                    "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit#gid=579672180"
+                },
+                "filtersUI": {
+                    "values": [
+                        {
+                            "lookupColumn": "Status",
+                            "lookupValue": "new"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "read-sheet-li",
+            "name": "Read Sheet - New Leads",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.6,
+            "position": [
+                -768,
+                208
+            ],
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "HopOeXjaGgSku8RO",
+                    "name": "Google Sheets account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "id": "loop-li",
+            "name": "Loop Over Leads",
+            "type": "n8n-nodes-base.splitInBatches",
+            "typeVersion": 3,
+            "position": [
+                -272,
+                192
+            ]
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "Cron - Every 4 Hours": {
+            "main": [
+                [
+                    {
+                        "node": "Build Search Queries",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Search Queries": {
+            "main": [
+                [
+                    {
+                        "node": "SerpAPI - Google Search",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "SerpAPI - Google Search": {
+            "main": [
+                [
+                    {
+                        "node": "Normalize - LinkedIn Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Normalize - LinkedIn Results": {
+            "main": [
+                [
+                    {
+                        "node": "Gemini - Batch Score & Parse",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini - Batch Score & Parse": {
+            "main": [
+                [
+                    {
+                        "node": "Filter - Score >= 0.30",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter - Score >= 0.30": {
+            "main": [
+                [
+                    {
+                        "node": "Append to Google Sheet",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Score >= 0.85": {
+            "main": [
+                [
+                    {
+                        "node": "Claude - Generate Outreach",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Loop Over Leads",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Claude - Generate Outreach": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Outreach Draft",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Outreach Draft": {
+            "main": [
+                [
+                    {
+                        "node": "Slack - Instant Alert",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Email - Instant Alert",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Update Sheet - Outreach Draft",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Manual Trigger - On-Demand Outreach": {
+            "main": [
+                [
+                    {
+                        "node": "Read Sheet - New Leads",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Read Sheet - New Leads": {
+            "main": [
+                [
+                    {
+                        "node": "Loop Over Leads",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Loop Over Leads": {
+            "main": [
+                [],
+                [
+                    {
+                        "node": "Check Score >= 0.85",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Update Sheet - Outreach Draft": {
+            "main": [
+                [
+                    {
+                        "node": "Loop Over Leads",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "versionId": "0a0db9df-4b3d-4a4c-a7c1-fb3c4266fc6e",
+    "meta": {
+        "instanceId": "bfa881661c018749d441660d36f63fdf552d02437db15de1ed54bb7a572d9e36"
+    },
+    "id": "dealhunter-linkedin",
+    "tags": []
+}

@@ -23,18 +23,19 @@
     },
     {
       "parameters": {
-        "options": {},
-        "sheetName": {
-          "__rl": true,
-          "mode": "list",
-          "value": "gid=1322681649",
-          "cachedResultName": "Enhanced Business Profile"
-        },
         "documentId": {
           "__rl": true,
           "mode": "url",
           "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
-        }
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1322681649,
+          "mode": "list",
+          "cachedResultName": "Enhanced Business Profile",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit#gid=1322681649"
+        },
+        "options": {}
       },
       "id": "get-business-profile",
       "name": "Get Business Profile",
@@ -53,7 +54,6 @@
     },
     {
       "parameters": {
-        "modelName": "models/gemini-2.0-flash",
         "options": {}
       },
       "id": "gemini-subreddit-model",
@@ -62,12 +62,12 @@
       "typeVersion": 1,
       "position": [
         -1200,
-        200
+        208
       ],
       "credentials": {
         "googlePalmApi": {
-          "id": "credential-id",
-          "name": "googlePalmApi Credential"
+          "id": "GQzTT53luBsOtosM",
+          "name": "Google Gemini(PaLM) Api account"
         }
       }
     },
@@ -80,16 +80,16 @@
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
       "position": [
-        -1000,
-        200
+        -1008,
+        208
       ]
     },
     {
       "parameters": {
-        "text": "=You are a Reddit lead generation strategist for ScaleBuild AI.\n\nAnalyze the business profile and identify the 8 best subreddits (return names WITHOUT r/ prefix).\n\nBusiness Profile:\n- Profession: {{ $json.profession }}\n- Industry: {{ $json.industry }}\n- Primary Services: {{ $json.primary_services }}\n- Target Client: {{ $json['target_client_profile '] }}\n- Pain Points: {{ $json.pain_points }}\n\nReturn ONLY subreddits where founders/CTOs/business owners actively seek help. Avoid hobbyist or purely promotional communities.\n\nAlways include at minimum: forhire, startups \u2014 then add 6 more based on the business profile.",
-        "batching": {},
         "promptType": "define",
-        "hasOutputParser": true
+        "text": "=You are a Reddit lead generation strategist for ScaleBuild AI.\n\nAnalyze the business profile and identify the 8 best subreddits (return names WITHOUT r/ prefix).\n\nBusiness Profile:\n- Profession: {{ $json.profession }}\n- Industry: {{ $json.industry }}\n- Primary Services: {{ $json.primary_services }}\n- Target Client: {{ $json['target_client_profile '] }}\n- Pain Points: {{ $json.pain_points }}\n\nReturn ONLY subreddits where founders/CTOs/business owners actively seek help. Avoid hobbyist or purely promotional communities.\n\nAlways include at minimum: forhire, startups — then add 6 more based on the business profile.",
+        "hasOutputParser": true,
+        "batching": {}
       },
       "id": "subreddit-selector",
       "name": "AI Subreddit Selector",
@@ -287,8 +287,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        144,
-        0
+        192,
+        -96
       ]
     },
     {
@@ -319,7 +319,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const posts = $input.all().map(i => i.json).filter(p => p && p.title && !p._noData);\nif (posts.length === 0) return [];\n\nconst apiKey = $env.GOOGLE_AI_API_KEY;\nconst BATCH_SIZE = 5;\nconst BETWEEN_BATCH_DELAY_MS = 1500;\nconst MAX_RETRIES = 2;\nconst CALL_TIMEOUT_MS = 120000;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, SaaS products, data pipelines.\n\nIDEAL LEAD: Founder/CTO/SMB owner with a business PROBLEM needing custom software. Pain point posts are HIGH VALUE.\n\nGOOD LEAD EXAMPLES:\n- \"compliance audits take weeks\" \u2192 needs automation \u2192 HIGH\n- \"we outgrew our no-code tool\" \u2192 needs custom dev \u2192 HIGH\n- \"evaluating dev shops\" \u2192 MEDIUM\n- \"I built a meme AI\" \u2192 0.0\n- Individual [For Hire] ad \u2192 0.0\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 0.9+=clear AI/automation need | 0.7-0.8=business pain point | 0.5-0.6=startup needs tech help | 0.0-0.2=irrelevant\n2. budget_score: 1.0=$100K+ | 0.8=$50-100K | 0.6=$25-50K | 0.4=$10-25K | 0.2=<$10K | 0.5=unknown substantial\n3. urgency_score: 1.0=this week | 0.7=1 month | 0.4=3 months | 0.2=no timeline\n4. win_probability: 0.8+=agency sought | 0.5-0.7=good fit | 0.2-0.4=wants freelancer | 0.0=no fit\n\nCOMPANY EXTRACTION:\n- Scan title AND description for company name, product name, website URL\n- Any URL becomes lead_website (domain only)\n- No name found? Return null. Never invent names.\n- lead_founder_name: use person name in post or Reddit username`;\n\nconst callGeminiWithRetry = async (prompt) => {\n  const body = {\n    contents: [{ parts: [{ text: prompt }] }],\n    generationConfig: { maxOutputTokens: 10000, temperature: 0.2, responseMimeType: 'application/json' },\n  };\n  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {\n    try {\n      const result = await Promise.race([\n        this.helpers.httpRequest({\n          method: 'POST',\n          url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n          body,\n        }),\n        new Promise((_, reject) => setTimeout(() => reject(new Error('call_timeout')), CALL_TIMEOUT_MS)),\n      ]);\n      return result;\n    } catch(e) {\n      const msg = String(e.message || '');\n      if (msg === 'call_timeout') throw new Error('call_timeout');\n      if (msg.includes('429') && attempt < MAX_RETRIES - 1) {\n        await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 2000));\n        continue;\n      }\n      throw e;\n    }\n  }\n};\n\nfunction computeScores(s) {\n  const overall = Math.round((\n    (s.relevance_score||0)*0.35 + (s.budget_score||0)*0.25 +\n    (s.urgency_score||0)*0.15 + (s.win_probability||0)*0.25\n  ) * 100) / 100;\n  let alert_tier = 'discard';\n  if (overall >= 0.85) alert_tier = 'instant';\n  else if (overall >= 0.70) alert_tier = 'digest';\n  else if (overall >= 0.30) alert_tier = 'dashboard';\n  return { ...s, overall_score: overall, alert_tier };\n}\n\nfunction fallback(reason) {\n  return computeScores({ relevance_score:0.1,budget_score:0.1,urgency_score:0.1,win_probability:0.1,\n    summary:'Parse error: '+reason,industry:'Unknown',tags:[],reasoning:reason,\n    estimated_budget_text:null,deadline_text:null,location:null,tech_stack:[],\n    company_name:null,contact_info:null,lead_founder_name:null,lead_website:null,reddit_author:null });\n}\n\nfunction buildItem(post, s) {\n  return { json: {\n    title: post.title,\n    description: post.description,\n    source: post.source,\n    source_url: post.source_url,\n    source_id: post.source_id,\n    posted_at: post.posted_at,\n    author: post.author,\n    subreddit: post.subreddit,\n    upvotes: post.upvotes,\n    num_comments: post.num_comments,\n    relevance_score: s.relevance_score,\n    budget_score: s.budget_score,\n    urgency_score: s.urgency_score,\n    win_probability: s.win_probability,\n    overall_score: s.overall_score,\n    ai_summary: s.summary,\n    industry: s.industry,\n    ai_tags: s.tags || [],\n    ai_reasoning: s.reasoning,\n    estimated_budget_text: s.estimated_budget_text,\n    deadline_text: s.deadline_text,\n    location: s.location,\n    tech_stack: s.tech_stack || [],\n    company_name: s.company_name,\n    contact_info: s.contact_info,\n    lead_founder: s.lead_founder_name || post.lead_founder || null,\n    lead_company: s.company_name || post.lead_company || null,\n    lead_website: s.lead_website || post.lead_website || null,\n    lead_contact: s.contact_info || null,\n    lead_score: Math.round(s.overall_score * 10),\n    alert_tier: s.alert_tier,\n    discovered_at: new Date().toISOString(),\n    status: 'new',\n    outreach_draft: '',\n  }};\n}\n\nconst results = [];\nfor (let i = 0; i < posts.length; i += BATCH_SIZE) {\n  const batch = posts.slice(i, i + BATCH_SIZE);\n  const postsBlock = batch.map((p, idx) =>\n    'POST ' + (idx+1) + ':\\nTitle: ' + p.title +\n    '\\nSource: ' + (p.source||'') +\n    '\\nAuthor: ' + (p.author||'unknown') +\n    '\\nDescription: ' + (p.description||'').substring(0, 600)\n  ).join('\\n\\n---\\n\\n');\n\n  const schema = '{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"2-3 sentences\",\"industry\":\"FinTech/HealthTech/SaaS/Manufacturing/eCommerce/General\",\"tags\":[],\"reasoning\":\"brief\",\"estimated_budget_text\":null,\"deadline_text\":null,\"location\":null,\"tech_stack\":[],\"company_name\":null,\"contact_info\":null,\"lead_founder_name\":null,\"lead_website\":null,\"reddit_author\":null}';\n  const prompt = SYSTEM_PROMPT + '\\n\\nScore ALL ' + batch.length + ' posts. Return ONLY a valid JSON array with exactly ' + batch.length + ' objects. Each object must have: ' + schema + '\\n\\n' + postsBlock;\n\n  let batchScores = null;\n  let debugSnippet = '';\n  try {\n    const respRaw = await callGeminiWithRetry(prompt);\n    const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n    const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n    debugSnippet = raw.substring(0, 300);\n    const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n    const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n    if (match) {\n      const parsed = JSON.parse(match[0]);\n      if (Array.isArray(parsed) && parsed.length > 0) batchScores = parsed;\n    }\n  } catch(e) { debugSnippet = 'EXCEPTION: ' + e.message; }\n\n  for (let j = 0; j < batch.length; j++) {\n    const s = batchScores && batchScores[j] ? computeScores(batchScores[j]) : fallback(debugSnippet || 'no response');\n    results.push(buildItem(batch[j], s));\n  }\n\n  if (i + BATCH_SIZE < posts.length) await new Promise(r => setTimeout(r, BETWEEN_BATCH_DELAY_MS));\n}\n\nreturn results;"
+        "jsCode": "const posts = $input.all().map(i => i.json).filter(p => p && p.title && !p._noData);\nif (posts.length === 0) return [];\n\nconst apiKey = $env.GOOGLE_AI_API_KEY;\nconst BATCH_SIZE = 5;\nconst BETWEEN_BATCH_DELAY_MS = 1500;\nconst MAX_RETRIES = 2;\nconst CALL_TIMEOUT_MS = 120000;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, SaaS products, data pipelines.\n\nIDEAL LEAD: Founder/CTO/SMB owner with a business PROBLEM needing custom software. Pain point posts are HIGH VALUE.\n\nGOOD LEAD EXAMPLES:\n- \"compliance audits take weeks\" → needs automation → HIGH\n- \"we outgrew our no-code tool\" → needs custom dev → HIGH\n- \"evaluating dev shops\" → MEDIUM\n- \"I built a meme AI\" → 0.0\n- Individual [For Hire] ad → 0.0\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 0.9+=clear AI/automation need | 0.7-0.8=business pain point | 0.5-0.6=startup needs tech help | 0.0-0.2=irrelevant\n2. budget_score: 1.0=$100K+ | 0.8=$50-100K | 0.6=$25-50K | 0.4=$10-25K | 0.2=<$10K | 0.5=unknown substantial\n3. urgency_score: 1.0=this week | 0.7=1 month | 0.4=3 months | 0.2=no timeline\n4. win_probability: 0.8+=agency sought | 0.5-0.7=good fit | 0.2-0.4=wants freelancer | 0.0=no fit\n\nCOMPANY EXTRACTION:\n- Scan title AND description for company name, product name, website URL\n- Any URL becomes lead_website (domain only)\n- No name found? Return null. Never invent names.\n- lead_founder_name: use person name in post or Reddit username`;\n\nconst callGeminiWithRetry = async (prompt) => {\n  const body = {\n    contents: [{ parts: [{ text: prompt }] }],\n    generationConfig: { maxOutputTokens: 10000, temperature: 0.2, responseMimeType: 'application/json' },\n  };\n  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {\n    try {\n      const result = await Promise.race([\n        this.helpers.httpRequest({\n          method: 'POST',\n          url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n          body,\n        }),\n        new Promise((_, reject) => setTimeout(() => reject(new Error('call_timeout')), CALL_TIMEOUT_MS)),\n      ]);\n      return result;\n    } catch(e) {\n      const msg = String(e.message || '');\n      if (msg === 'call_timeout') throw new Error('call_timeout');\n      if (msg.includes('429') && attempt < MAX_RETRIES - 1) {\n        await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 2000));\n        continue;\n      }\n      throw e;\n    }\n  }\n};\n\nfunction computeScores(s) {\n  const overall = Math.round((\n    (s.relevance_score||0)*0.35 + (s.budget_score||0)*0.25 +\n    (s.urgency_score||0)*0.15 + (s.win_probability||0)*0.25\n  ) * 100) / 100;\n  let alert_tier = 'discard';\n  if (overall >= 0.85) alert_tier = 'instant';\n  else if (overall >= 0.70) alert_tier = 'digest';\n  else if (overall >= 0.30) alert_tier = 'dashboard';\n  return { ...s, overall_score: overall, alert_tier };\n}\n\nfunction fallback(reason) {\n  return computeScores({ relevance_score:0.1,budget_score:0.1,urgency_score:0.1,win_probability:0.1,\n    summary:'Parse error: '+reason,industry:'Unknown',tags:[],reasoning:reason,\n    estimated_budget_text:null,deadline_text:null,location:null,tech_stack:[],\n    company_name:null,contact_info:null,lead_founder_name:null,lead_website:null,reddit_author:null });\n}\n\nfunction buildItem(post, s) {\n  return { json: {\n    title: post.title,\n    description: post.description,\n    source: post.source,\n    source_url: post.source_url,\n    source_id: post.source_id,\n    posted_at: post.posted_at,\n    author: post.author,\n    subreddit: post.subreddit,\n    upvotes: post.upvotes,\n    num_comments: post.num_comments,\n    relevance_score: s.relevance_score,\n    budget_score: s.budget_score,\n    urgency_score: s.urgency_score,\n    win_probability: s.win_probability,\n    overall_score: s.overall_score,\n    ai_summary: s.summary,\n    industry: s.industry,\n    ai_tags: s.tags || [],\n    ai_reasoning: s.reasoning,\n    estimated_budget_text: s.estimated_budget_text,\n    deadline_text: s.deadline_text,\n    location: s.location,\n    tech_stack: s.tech_stack || [],\n    company_name: s.company_name,\n    contact_info: s.contact_info,\n    lead_founder: s.lead_founder_name || post.lead_founder || null,\n    lead_company: s.company_name || post.lead_company || null,\n    lead_website: s.lead_website || post.lead_website || null,\n    lead_contact: s.contact_info || null,\n    lead_score: Math.round(s.overall_score * 10),\n    alert_tier: s.alert_tier,\n    discovered_at: new Date().toISOString(),\n    status: 'new',\n    outreach_draft: '',\n  }};\n}\n\nconst results = [];\nfor (let i = 0; i < posts.length; i += BATCH_SIZE) {\n  const batch = posts.slice(i, i + BATCH_SIZE);\n  const postsBlock = batch.map((p, idx) =>\n    'POST ' + (idx+1) + ':\\nTitle: ' + p.title +\n    '\\nSource: ' + (p.source||'') +\n    '\\nAuthor: ' + (p.author||'unknown') +\n    '\\nDescription: ' + (p.description||'').substring(0, 600)\n  ).join('\\n\\n---\\n\\n');\n\n  const schema = '{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"2-3 sentences\",\"industry\":\"FinTech/HealthTech/SaaS/Manufacturing/eCommerce/General\",\"tags\":[],\"reasoning\":\"brief\",\"estimated_budget_text\":null,\"deadline_text\":null,\"location\":null,\"tech_stack\":[],\"company_name\":null,\"contact_info\":null,\"lead_founder_name\":null,\"lead_website\":null,\"reddit_author\":null}';\n  const prompt = SYSTEM_PROMPT + '\\n\\nScore ALL ' + batch.length + ' posts. Return ONLY a valid JSON array with exactly ' + batch.length + ' objects. Each object must have: ' + schema + '\\n\\n' + postsBlock;\n\n  let batchScores = null;\n  let debugSnippet = '';\n  try {\n    const respRaw = await callGeminiWithRetry(prompt);\n    const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n    const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n    debugSnippet = raw.substring(0, 300);\n    const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n    const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n    if (match) {\n      const parsed = JSON.parse(match[0]);\n      if (Array.isArray(parsed) && parsed.length > 0) batchScores = parsed;\n    }\n  } catch(e) { debugSnippet = 'EXCEPTION: ' + e.message; }\n\n  for (let j = 0; j < batch.length; j++) {\n    const s = batchScores && batchScores[j] ? computeScores(batchScores[j]) : fallback(debugSnippet || 'no response');\n    results.push(buildItem(batch[j], s));\n  }\n\n  if (i + BATCH_SIZE < posts.length) await new Promise(r => setTimeout(r, BETWEEN_BATCH_DELAY_MS));\n}\n\nreturn results;"
       },
       "id": "gemini-batch-score",
       "name": "Gemini - Batch Score & Parse",
@@ -427,8 +427,8 @@
         1600,
         -160
       ],
-      "onError": "continueRegularOutput",
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -458,7 +458,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: {\n  ...$input.item.json,\n  enrichment_source: 'hunter-miss',\n}}];"
+        "jsCode": "return $input.all().map(item => ({\n  json: {\n    ...item.json,\n    enrichment_source: 'hunter-miss',\n  }\n}));"
       },
       "id": "flag-hunter-miss",
       "name": "Flag - Hunter Miss",
@@ -499,19 +499,6 @@
       "position": [
         2080,
         -160
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "append"
-      },
-      "id": "merge-lead-branches",
-      "name": "Merge Lead Branches",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [
-        2320,
-        0
       ]
     },
     {
@@ -617,7 +604,7 @@
               "id": "Source ID",
               "displayName": "Source ID",
               "required": false,
-              "defaultMatch": true,
+              "defaultMatch": false,
               "display": true,
               "type": "string",
               "canBeUsedToMatch": true
@@ -652,15 +639,6 @@
             {
               "id": "Posted At",
               "displayName": "Posted At",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "Outreach Draft",
-              "displayName": "Outreach Draft",
               "required": false,
               "defaultMatch": false,
               "display": true,
@@ -823,6 +801,15 @@
             {
               "id": "AI Reasoning",
               "displayName": "AI Reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Outreach Draft",
+              "displayName": "Outreach Draft",
               "required": false,
               "defaultMatch": false,
               "display": true,
@@ -1007,7 +994,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  \"contents\": [{\"parts\": [{\"text\": `You are writing as Ujjwal Roy, CEO of ScaleBuild AI (Junkiri Labs LLC).\n\nLEAD:\nTitle: ${$json[\"Title\"] || $json.title || \"\"}\nSummary: ${$json[\"AI Summary\"] || $json.ai_summary || \"\"}\nIndustry: ${$json[\"Industry\"] || $json.industry || \"\"}\nTech Stack: ${$json[\"Tech Stack\"] || ($json.tech_stack||[]).join(', ') || \"Not specified\"}\nBudget: ${$json[\"Budget Mentioned\"] || $json.estimated_budget_text || \"Not mentioned\"}\nSource: r/${$json[\"Subreddit\"] || $json.subreddit || \"HackerNews\"}\n\nRULES:\n- Write a Reddit DM as Ujjwal Roy, CEO of ScaleBuild AI\n- Tone: casual, human, conversational \u2014 like one founder messaging another\n- Max 100 words, no fluff\n- Start by referencing their specific pain point\n- Briefly mention ScaleBuild AI helps with AI/automation (Intel/IBM/Micron background)\n- End with a soft CTA\n- NO em dashes, NO exclamation marks\n- End with \"- Ujjwal (ScaleBuild AI)\"\n\nReturn ONLY the DM message text. No markdown.`}]}],\n  \"generationConfig\": {\"maxOutputTokens\": 6000, \"temperature\": 0.6}\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  \"contents\": [{\"parts\": [{\"text\": `You are writing as Ujjwal Roy, CEO of ScaleBuild AI (Junkiri Labs LLC).\n\nLEAD:\nTitle: ${$json[\"Title\"] || $json.title || \"\"}\nSummary: ${$json[\"AI Summary\"] || $json.ai_summary || \"\"}\nIndustry: ${$json[\"Industry\"] || $json.industry || \"\"}\nTech Stack: ${$json[\"Tech Stack\"] || ($json.tech_stack||[]).join(', ') || \"Not specified\"}\nBudget: ${$json[\"Budget Mentioned\"] || $json.estimated_budget_text || \"Not mentioned\"}\nSource: r/${$json[\"Subreddit\"] || $json.subreddit || \"HackerNews\"}\n\nRULES:\n- Write a Reddit DM as Ujjwal Roy, CEO of ScaleBuild AI\n- Tone: casual, human, conversational — like one founder messaging another\n- Max 100 words, no fluff\n- Start by referencing their specific pain point\n- Briefly mention ScaleBuild AI helps with AI/automation (Intel/IBM/Micron background)\n- End with a soft CTA\n- NO em dashes, NO exclamation marks\n- End with \"- Ujjwal (ScaleBuild AI)\"\n\nReturn ONLY the DM message text. No markdown.`}]}],\n  \"generationConfig\": {\"maxOutputTokens\": 6000, \"temperature\": 0.6}\n}) }}",
         "options": {
           "timeout": 30000
         }
@@ -1043,7 +1030,7 @@
           "value": "#dealhunter-alerts",
           "mode": "name"
         },
-        "text": "={{ (function() { const d = $('Parse Outreach Draft').item.json; const author = d['Author'] || d['author'] || ''; const dmLink = author ? 'https://reddit.com/message/compose?to=' + author : ''; return '\ud83d\udea8 *HIGH-VALUE LEAD* (Score: ' + d['Overall Score'] + ')\\n\\n*' + d['Title'] + '*\\nr/' + (d['Subreddit'] || '') + ' | Industry: ' + (d['Industry'] || 'Unknown') + '\\n\\n*AI Summary:*\\n' + (d['AI Summary'] || '') + '\\n\\n\ud83d\udcca Relevance: ' + d['Relevance Score'] + ' | Budget: ' + d['Budget Score'] + ' | Win Prob: ' + d['Win Probability'] + '\\n\ud83d\udcb0 Budget: ' + (d['Budget Mentioned'] || 'Not mentioned') + '\\n\\n*\ud83d\udc64 Reddit Author*\\n\u2022 u/' + (author || 'unknown') + (dmLink ? '\\n\u2022 <' + dmLink + '|Send Reddit DM>' : '') + '\\n\\n*\ud83d\udcbc Lead Contact (Hunter Enriched)*\\n\u2022 Name: ' + (d['Hunter Name'] || d['Lead Founder'] || 'Not found') + '\\n\u2022 Company: ' + (d['Hunter Company'] || d['Lead Company'] || 'Not found') + '\\n\u2022 Email: ' + (d['Hunter Email'] || d['Lead Contact'] || 'Not found') + '\\n\u2022 Website: ' + (d['Lead Website'] || 'Not found') + '\\n\u2b50 Lead Score: ' + d['Lead Score'] + '/10\\n\\n<' + d['Source URL'] + '|View Post>\\n\\n*\ud83d\udce7 Outreach Draft:*\\n' + (d['outreach_draft'] || ''); })() }}",
+        "text": "={{ (function() { const d = $('Parse Outreach Draft').item.json; const author = d['Author'] || d['author'] || ''; const dmLink = author ? 'https://reddit.com/message/compose?to=' + author : ''; return '🚨 *HIGH-VALUE LEAD* (Score: ' + d['Overall Score'] + ')\\n\\n*' + d['Title'] + '*\\nr/' + (d['Subreddit'] || '') + ' | Industry: ' + (d['Industry'] || 'Unknown') + '\\n\\n*AI Summary:*\\n' + (d['AI Summary'] || '') + '\\n\\n📊 Relevance: ' + d['Relevance Score'] + ' | Budget: ' + d['Budget Score'] + ' | Win Prob: ' + d['Win Probability'] + '\\n💰 Budget: ' + (d['Budget Mentioned'] || 'Not mentioned') + '\\n\\n*👤 Reddit Author*\\n• u/' + (author || 'unknown') + (dmLink ? '\\n• <' + dmLink + '|Send Reddit DM>' : '') + '\\n\\n*💼 Lead Contact (Hunter Enriched)*\\n• Name: ' + (d['Hunter Name'] || d['Lead Founder'] || 'Not found') + '\\n• Company: ' + (d['Hunter Company'] || d['Lead Company'] || 'Not found') + '\\n• Email: ' + (d['Hunter Email'] || d['Lead Contact'] || 'Not found') + '\\n• Website: ' + (d['Lead Website'] || 'Not found') + '\\n⭐ Lead Score: ' + d['Lead Score'] + '/10\\n\\n<' + d['Source URL'] + '|View Post>\\n\\n*📧 Outreach Draft:*\\n' + (d['outreach_draft'] || ''); })() }}",
         "otherOptions": {}
       },
       "id": "slack-instant",
@@ -1067,7 +1054,7 @@
       "parameters": {
         "fromEmail": "deshpane834@gmail.com",
         "toEmail": "deshpane834@gmail.com",
-        "subject": "=\ud83d\udea8 DealHunter [{{ $('Parse Outreach Draft').item.json['Overall Score'] }}] - {{ $('Parse Outreach Draft').item.json['Title'].substring(0,60) }}",
+        "subject": "=🚨 DealHunter [{{ $('Parse Outreach Draft').item.json['Overall Score'] }}] - {{ $('Parse Outreach Draft').item.json['Title'].substring(0,60) }}",
         "options": {
           "appendAttribution": false
         }
@@ -1117,19 +1104,210 @@
               "id": "Source ID",
               "displayName": "Source ID",
               "required": false,
-              "defaultMatch": true,
+              "defaultMatch": false,
               "display": true,
               "type": "string",
               "canBeUsedToMatch": true
             },
             {
-              "id": "Outreach Draft",
-              "displayName": "Outreach Draft",
+              "id": "Title",
+              "displayName": "Title",
               "required": false,
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": false
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Subreddit",
+              "displayName": "Subreddit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Source URL",
+              "displayName": "Source URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Posted At",
+              "displayName": "Posted At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Discovered At",
+              "displayName": "Discovered At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Author",
+              "displayName": "Author",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Overall Score",
+              "displayName": "Overall Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Relevance Score",
+              "displayName": "Relevance Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Budget Score",
+              "displayName": "Budget Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Urgency Score",
+              "displayName": "Urgency Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Win Probability",
+              "displayName": "Win Probability",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Alert Tier",
+              "displayName": "Alert Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Industry",
+              "displayName": "Industry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Tags",
+              "displayName": "AI Tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Tech Stack",
+              "displayName": "Tech Stack",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Budget Mentioned",
+              "displayName": "Budget Mentioned",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Upvotes",
+              "displayName": "Upvotes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Comments",
+              "displayName": "Comments",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Status",
@@ -1138,7 +1316,116 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": false
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Reasoning",
+              "displayName": "AI Reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Outreach Draft",
+              "displayName": "Outreach Draft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Lead Founder",
+              "displayName": "Lead Founder",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lead Company",
+              "displayName": "Lead Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lead Website",
+              "displayName": "Lead Website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lead Contact",
+              "displayName": "Lead Contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lead Score",
+              "displayName": "Lead Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hunter Name",
+              "displayName": "Hunter Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hunter Email",
+              "displayName": "Hunter Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hunter Title",
+              "displayName": "Hunter Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hunter Company",
+              "displayName": "Hunter Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
             }
           ],
           "attemptToConvertTypes": false,
@@ -1169,7 +1456,7 @@
           "value": "#dealhunter-digest",
           "mode": "name"
         },
-        "text": "={{ ($json.overall_score >= 0.75 ? '\ud83d\udfe0 *MEDIUM-HIGH LEAD*' : '\ud83d\udfe1 *MEDIUM LEAD*') + ' (Score: ' + $json.overall_score + ')\\n' + ($json.source?.startsWith('reddit') ? '\ud83e\udd16 Reddit r/' + $json.subreddit : '\ud83d\udfe4 HackerNews') + ' | ' + ($json.industry || 'Unknown industry') + '\\n\\n*' + $json.title + '*\\n' + ($json.lead_company ? '\ud83c\udfe2 ' + $json.lead_company + '\\n' : '') + ($json.lead_website ? '\ud83c\udf10 ' + $json.lead_website + '\\n' : '') + '\\n' + ($json.ai_summary || '').substring(0, 200) + '\\n\\n\ud83d\udcca Relevance: ' + $json.relevance_score + ' | Budget: ' + $json.budget_score + ' | Win Prob: ' + $json.win_probability + '\\n<' + $json.source_url + '|View Post>' }}",
+        "text": "={{ ($json.overall_score >= 0.75 ? '🟠 *MEDIUM-HIGH LEAD*' : '🟡 *MEDIUM LEAD*') + ' (Score: ' + $json.overall_score + ')\\n' + ($json.source?.startsWith('reddit') ? '🤖 Reddit r/' + $json.subreddit : '🟤 HackerNews') + ' | ' + ($json.industry || 'Unknown industry') + '\\n\\n*' + $json.title + '*\\n' + ($json.lead_company ? '🏢 ' + $json.lead_company + '\\n' : '') + ($json.lead_website ? '🌐 ' + $json.lead_website + '\\n' : '') + '\\n' + ($json.ai_summary || '').substring(0, 200) + '\\n\\n📊 Relevance: ' + $json.relevance_score + ' | Budget: ' + $json.budget_score + ' | Win Prob: ' + $json.win_probability + '\\n<' + $json.source_url + '|View Post>' }}",
         "otherOptions": {}
       },
       "id": "slack-digest",
@@ -1235,7 +1522,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst now = new Date();\nconst yesterday = new Date(now.getTime() - 24*60*60*1000);\nconst leads = items.filter(item => {\n  const discovered = new Date(item.json['Discovered At'] || 0);\n  const score = parseFloat(item.json['Overall Score']) || 0;\n  return discovered >= yesterday && score >= 0.70;\n}).sort((a,b) => (parseFloat(b.json['Overall Score'])||0) - (parseFloat(a.json['Overall Score'])||0)).slice(0,15);\n\nif (leads.length === 0) return [{ json: { count: 0, emailBody: '<p>No leads scored >= 0.70 in last 24h.</p>', hasLeads: false } }];\n\nconst rows = leads.map((item,idx) => {\n  const d = item.json;\n  const score = parseFloat(d['Overall Score'])||0;\n  return `<tr><td>${idx+1}</td><td><a href=\"${d['Source URL']}\">${d['Title']}</a></td><td>r/${d['Subreddit']||''}</td><td><strong>${score.toFixed(2)}</strong></td><td>${(d['AI Summary']||'').substring(0,120)}...</td></tr>`;\n}).join('');\n\nconst emailBody = `<h2>\ud83d\udcca DealHunter Daily Digest</h2><p><strong>${leads.length} leads</strong> scored \u2265 0.70 in last 24h</p><table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%\"><tr><th>#</th><th>Title</th><th>Source</th><th>Score</th><th>Summary</th></tr>${rows}</table><p><em>Generated ${now.toISOString()}</em></p>`;\n\nconst byTier = {hot:0,medium:0,low:0};\nleads.forEach(item => {\n  const s = parseFloat(item.json['Overall Score'])||0;\n  if(s>=0.85)byTier.hot++; else if(s>=0.60)byTier.medium++; else byTier.low++;\n});\nconst slackSummary = `\ud83d\udcca *DealHunter Daily Report*\\n\\n*${leads.length} leads* scored \u2265 0.70 in last 24h\\n\ud83d\udd34 Hot: ${byTier.hot} | \ud83d\udfe0 Medium: ${byTier.medium} | \ud83d\udfe1 Low: ${byTier.low}\\n\ud83d\udce7 Full report sent to email`;\n\nreturn [{ json: { count: leads.length, emailBody, hasLeads: true, slackSummary } }];"
+        "jsCode": "const items = $input.all();\nconst now = new Date();\nconst yesterday = new Date(now.getTime() - 24*60*60*1000);\nconst leads = items.filter(item => {\n  const discovered = new Date(item.json['Discovered At'] || 0);\n  const score = parseFloat(item.json['Overall Score']) || 0;\n  return discovered >= yesterday && score >= 0.70;\n}).sort((a,b) => (parseFloat(b.json['Overall Score'])||0) - (parseFloat(a.json['Overall Score'])||0)).slice(0,15);\n\nif (leads.length === 0) return [{ json: { count: 0, emailBody: '<p>No leads scored >= 0.70 in last 24h.</p>', hasLeads: false } }];\n\nconst rows = leads.map((item,idx) => {\n  const d = item.json;\n  const score = parseFloat(d['Overall Score'])||0;\n  return `<tr><td>${idx+1}</td><td><a href=\"${d['Source URL']}\">${d['Title']}</a></td><td>r/${d['Subreddit']||''}</td><td><strong>${score.toFixed(2)}</strong></td><td>${(d['AI Summary']||'').substring(0,120)}...</td></tr>`;\n}).join('');\n\nconst emailBody = `<h2>📊 DealHunter Daily Digest</h2><p><strong>${leads.length} leads</strong> scored ≥ 0.70 in last 24h</p><table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%\"><tr><th>#</th><th>Title</th><th>Source</th><th>Score</th><th>Summary</th></tr>${rows}</table><p><em>Generated ${now.toISOString()}</em></p>`;\n\nconst byTier = {hot:0,medium:0,low:0};\nleads.forEach(item => {\n  const s = parseFloat(item.json['Overall Score'])||0;\n  if(s>=0.85)byTier.hot++; else if(s>=0.60)byTier.medium++; else byTier.low++;\n});\nconst slackSummary = `📊 *DealHunter Daily Report*\\n\\n*${leads.length} leads* scored ≥ 0.70 in last 24h\\n🔴 Hot: ${byTier.hot} | 🟠 Medium: ${byTier.medium} | 🟡 Low: ${byTier.low}\\n📧 Full report sent to email`;\n\nreturn [{ json: { count: leads.length, emailBody, hasLeads: true, slackSummary } }];"
       },
       "id": "build-digest",
       "name": "Build Daily Digest Email",
@@ -1282,7 +1569,7 @@
       "parameters": {
         "fromEmail": "deshpane834@gmail.com",
         "toEmail": "deshpane834@gmail.com",
-        "subject": "=\ud83d\udcca DealHunter Daily Digest - {{ $json.count }} New Leads",
+        "subject": "=📊 DealHunter Daily Digest - {{ $json.count }} New Leads",
         "options": {
           "appendAttribution": false
         }
@@ -1333,7 +1620,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1240,
+        -1248,
         0
       ]
     }
@@ -1585,7 +1872,7 @@
       "main": [
         [
           {
-            "node": "Merge Lead Branches",
+            "node": "Dedup by Source ID",
             "type": "main",
             "index": 0
           }
@@ -1603,7 +1890,7 @@
       "main": [
         [
           {
-            "node": "Merge Lead Branches",
+            "node": "Dedup by Source ID",
             "type": "main",
             "index": 0
           }
@@ -1611,17 +1898,6 @@
       ]
     },
     "Set Empty Hunter Fields": {
-      "main": [
-        [
-          {
-            "node": "Merge Lead Branches",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Merge Lead Branches": {
       "main": [
         [
           {
@@ -1667,14 +1943,14 @@
     },
     "Loop Over Items": {
       "main": [
+        [],
         [
           {
             "node": "Wait - Process Rate Limit",
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
     "Wait - Process Rate Limit": {
@@ -1842,6 +2118,7 @@
   "settings": {
     "executionOrder": "v1"
   },
+  "versionId": "4c4a849d-86bc-491e-a706-aca56a2c3dd5",
   "meta": {
     "instanceId": "bfa881661c018749d441660d36f63fdf552d02437db15de1ed54bb7a572d9e36"
   },
