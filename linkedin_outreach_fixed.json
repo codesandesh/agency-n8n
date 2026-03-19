@@ -111,7 +111,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const post = $input.item.json;\nconst apiKey = $env.GOOGLE_AI_API_KEY;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, custom software, data pipelines.\n\nThese posts are from LinkedIn — found via Google search using site:linkedin.com.\n\nIDEAL LEAD: Someone actively looking for a tech partner, dev team, or AI implementation help.\n\nHARD EXCLUSIONS — Score overall_score 0.0 immediately, do not process:\n- Lead is from India or an Indian company (location: India, .in domain, Indian city/company name) → 0.0\n- Lead is requesting to build a SaaS subscription product (we do NOT build SaaS products) → 0.0\n- Budget clearly under $10,000 OR budget_score would be below 0.3 → 0.0\n- Individual freelancer or [For Hire] ad → 0.0\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 0.9+=clearly seeking AI/software partner | 0.7=business pain | 0.5=vague tech need | 0.0=irrelevant\n2. budget_score: 1.0=$100K+ | 0.8=$50-100K | 0.6=$25-50K | 0.5=unknown but enterprise context | 0.2=small/unclear\n3. urgency_score: 1.0=this week | 0.7=1 month | 0.4=exploring | 0.2=no urgency\n4. win_probability: 0.8+=explicitly seeking agency/partner | 0.5=good fit unclear | 0.3=wants freelancer | 0.1=no fit\n\nBUDGET ESTIMATION (ALWAYS fill estimated_budget_text, never null):\n- Series A/B funding post → \"$50K-$200K (post-funding build)\"\n- Contract job posting → \"$10K-$50K (contract scope)\"\n- Looking for tech partner/agency → \"$25K-$100K (agency engagement)\"\n- Seed/MVP build → \"$10K-$30K (MVP scope)\"\n- Enterprise company context → \"$50K-$500K (enterprise)\"\n- Individual/small project → \"$5K-$20K\"\n\nCOMPANY EXTRACTION: Extract company name, founder name, website from LinkedIn URL or snippet. Never invent.`;\n\nconst prompt = SYSTEM_PROMPT + `\n\nScore this LinkedIn lead. Return ONLY a single valid JSON object:\n{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"3-5 sentence detailed summary of the opportunity, pain points, and why ScaleBuild AI is a fit\",\"industry\":\"FinTech/HealthTech/SaaS/General\",\"tags\":[\"tag1\",\"tag2\"],\"reasoning\":\"Full detailed AI reasoning: explain each score dimension in 2-3 sentences — why this relevance score, why this budget score, why this urgency score, why this win probability. Give overall recommendation on whether to pursue and suggested approach.\",\"estimated_budget_text\":\"$X-$Y (reason)\",\"tech_stack\":[],\"company_name\":null,\"lead_founder_name\":null,\"lead_website\":null}\n\nTitle: ${post.title}\nSource: ${post.source}\nAuthor: ${post.author || ''}\nDescription: ${(post.description||'').substring(0, 1000)}${post.budget_text ? '\\nBudget: ' + post.budget_text : ''}`;\n\nconst body = {\n  contents: [{ parts: [{ text: prompt }] }],\n  generationConfig: { maxOutputTokens: 100000, temperature: 0.2, responseMimeType: 'application/json' }\n};\n\nlet s = null;\ntry {\n  const respRaw = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n    body\n  });\n  const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n  const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (match) s = JSON.parse(match[0]);\n} catch(e) {}\n\nif (!s) s = {\n  relevance_score:0.5, budget_score:0.5, urgency_score:0.3, win_probability:0.3,\n  summary:'Parse error - using defaults', industry:'General', tags:[], reasoning:'Could not parse Gemini response',\n  estimated_budget_text:'$10K-$50K (estimated)', tech_stack:[],\n  company_name:null, lead_founder_name:null, lead_website:null\n};\n\nconst overall = Math.round(((s.relevance_score*0.35)+(s.budget_score*0.30)+(s.urgency_score*0.15)+(s.win_probability*0.20))*100)/100;\nconst alert_tier = overall>=0.85?'instant':overall>=0.70?'digest':overall>=0.30?'dashboard':'discard';\n\nreturn { json: {\n  source_id: post.source_id, title: post.title, description: post.description,\n  source: post.source, source_url: post.source_url, posted_at: post.posted_at,\n  author: post.author, subreddit: post.subreddit || '', upvotes: post.upvotes || 0,\n  num_comments: post.num_comments || 0, flair_text: post.flair_text || '',\n  relevance_score: s.relevance_score, budget_score: s.budget_score,\n  urgency_score: s.urgency_score, win_probability: s.win_probability,\n  overall_score: overall, ai_summary: s.summary, industry: s.industry,\n  ai_tags: s.tags||[], ai_reasoning: s.reasoning,\n  estimated_budget_text: s.estimated_budget_text||'',\n  budget_mentioned: post.budget_text || s.estimated_budget_text || '',\n  tech_stack: s.tech_stack||[], company_name: s.company_name||null,\n  lead_founder: s.lead_founder_name||null, lead_company: s.company_name||null,\n  lead_website: s.lead_website||null, lead_contact: null,\n  lead_score: Math.round(overall*10),\n  alert_tier, discovered_at: new Date().toISOString(), status:'new',\n  location: s.location||null, deadline_text: s.deadline_text||null,\n  outreach_draft: '',\n  hunter_name:'', hunter_email:'', hunter_title:'', hunter_company:''\n}};"
+        "jsCode": "const post = $input.item.json;\nconst apiKey = $env.GOOGLE_AI_API_KEY;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, SaaS products, data pipelines.\n\nThese posts are from LinkedIn — found via Google search using site:linkedin.com.\n\nIDEAL LEAD: Someone actively looking for a tech partner, dev team, or AI implementation help.\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 0.9+=clearly seeking AI/software partner | 0.7=business pain | 0.5=vague tech need | 0.0=irrelevant\n2. budget_score: 1.0=$100K+ | 0.8=$50-100K | 0.6=$25-50K | 0.5=unknown but enterprise context | 0.2=small/unclear\n3. urgency_score: 1.0=this week | 0.7=1 month | 0.4=exploring | 0.2=no urgency\n4. win_probability: 0.8+=explicitly seeking agency/partner | 0.5=good fit unclear | 0.3=wants freelancer | 0.1=no fit\n\nBUDGET ESTIMATION (ALWAYS fill estimated_budget_text, never null):\n- Series A/B funding post → \"$50K-$200K (post-funding build)\"\n- Contract job posting → \"$10K-$50K (contract scope)\"\n- Looking for tech partner/agency → \"$25K-$100K (agency engagement)\"\n- Seed/MVP build → \"$10K-$30K (MVP scope)\"\n- Enterprise company context → \"$50K-$500K (enterprise)\"\n- Individual/small project → \"$5K-$20K\"\n\nCOMPANY EXTRACTION: Extract company name, founder name, website from LinkedIn URL or snippet. Never invent.`;\n\nconst prompt = SYSTEM_PROMPT + `\n\nScore this LinkedIn lead. Return ONLY a single valid JSON object:\n{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"3-5 sentence detailed summary of the opportunity, pain points, and why ScaleBuild AI is a fit\",\"industry\":\"FinTech/HealthTech/SaaS/General\",\"tags\":[\"tag1\",\"tag2\"],\"reasoning\":\"Full detailed AI reasoning: explain each score dimension in 2-3 sentences — why this relevance score, why this budget score, why this urgency score, why this win probability. Give overall recommendation on whether to pursue and suggested approach.\",\"estimated_budget_text\":\"$X-$Y (reason)\",\"tech_stack\":[],\"company_name\":null,\"lead_founder_name\":null,\"lead_website\":null}\n\nTitle: ${post.title}\nSource: ${post.source}\nAuthor: ${post.author || ''}\nDescription: ${(post.description||'').substring(0, 1000)}${post.budget_text ? '\\nBudget: ' + post.budget_text : ''}`;\n\nconst body = {\n  contents: [{ parts: [{ text: prompt }] }],\n  generationConfig: { maxOutputTokens: 100000, temperature: 0.2, responseMimeType: 'application/json' }\n};\n\nlet s = null;\ntry {\n  const respRaw = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n    body\n  });\n  const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n  const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (match) s = JSON.parse(match[0]);\n} catch(e) {}\n\nif (!s) s = {\n  relevance_score:0.5, budget_score:0.5, urgency_score:0.3, win_probability:0.3,\n  summary:'Parse error - using defaults', industry:'General', tags:[], reasoning:'Could not parse Gemini response',\n  estimated_budget_text:'$10K-$50K (estimated)', tech_stack:[],\n  company_name:null, lead_founder_name:null, lead_website:null\n};\n\nconst overall = Math.round(((s.relevance_score*0.35)+(s.budget_score*0.30)+(s.urgency_score*0.15)+(s.win_probability*0.20))*100)/100;\nconst alert_tier = overall>=0.85?'instant':overall>=0.70?'digest':overall>=0.30?'dashboard':'discard';\n\nreturn { json: {\n  source_id: post.source_id, title: post.title, description: post.description,\n  source: post.source, source_url: post.source_url, posted_at: post.posted_at,\n  author: post.author, subreddit: post.subreddit || '', upvotes: post.upvotes || 0,\n  num_comments: post.num_comments || 0, flair_text: post.flair_text || '',\n  relevance_score: s.relevance_score, budget_score: s.budget_score,\n  urgency_score: s.urgency_score, win_probability: s.win_probability,\n  overall_score: overall, ai_summary: s.summary, industry: s.industry,\n  ai_tags: s.tags||[], ai_reasoning: s.reasoning,\n  estimated_budget_text: s.estimated_budget_text||'',\n  budget_mentioned: post.budget_text || s.estimated_budget_text || '',\n  tech_stack: s.tech_stack||[], company_name: s.company_name||null,\n  lead_founder: s.lead_founder_name||null, lead_company: s.company_name||null,\n  lead_website: s.lead_website||null, lead_contact: null,\n  lead_score: Math.round(overall*10),\n  alert_tier, discovered_at: new Date().toISOString(), status:'new',\n  location: s.location||null, deadline_text: s.deadline_text||null,\n  outreach_draft: '',\n  hunter_name:'', hunter_email:'', hunter_title:'', hunter_company:''\n}};"
       },
       "id": "score-li",
       "name": "Gemini - Score & Parse",
@@ -139,7 +139,7 @@
                 "operation": "gte"
               },
               "leftValue": "={{ $json.overall_score }}",
-              "rightValue": 0.8
+              "rightValue": 0.6
             }
           ],
           "combinator": "and"
@@ -147,7 +147,7 @@
         "options": {}
       },
       "id": "filter-li",
-      "name": "Filter - Score >= 0.80",
+      "name": "Filter - Score >= 0.60",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
@@ -328,13 +328,17 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "url": "https://api.anthropic.com/v1/messages",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-goog-api-key",
-              "value": "={{ $env.GOOGLE_AI_API_KEY }}"
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
             },
             {
               "name": "Content-Type",
@@ -344,13 +348,13 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": `You are writing as Ujjwal Roy, CEO of ScaleBuild AI (Junkiri Labs LLC).\\n\\nLEAD:\\nTitle: ${$json.title || $json['Title'] || ''}\\nSummary: ${$json.ai_summary || $json['AI Summary'] || ''}\\nCompany: ${$json.lead_company || $json['Lead Company'] || 'Unknown'}\\nIndustry: ${$json.industry || $json['Industry'] || 'Unknown'}\\nTech Requirements: ${($json.tech_stack || []).join(', ') || $json['Tech Stack'] || 'Not specified'}\\nRelevant ScaleBuild Capabilities: Custom AI/ML models, computer vision for manufacturing and security, enterprise workflow automation, full-stack SaaS development, data pipelines\\n\\nWrite a LinkedIn outreach message following this EXACT structure:\\n\\n1. HOOK (1-2 sentences): Reference their specific pain point or need directly. Make it personal and precise.\\n2. CREDENTIALS (2-3 sentences): Mention ScaleBuild AI builds custom AI/ML models, computer vision systems for manufacturing and security, and enterprise automation. Reference ex-Intel/IBM/Micron engineering background and shipped production systems.\\n3. SOFT CTA (1 sentence): Low-pressure ask — happy to connect or have a quick conversation if relevant.\\n\\nRULES:\\n- 150-200 words total\\n- Tone: direct, confident, no fluff, human-sounding, like one founder to another\\n- NO em dashes\\n- NO exclamation marks\\n- Do not start with \\\"I hope\\\" or generic openers\\n\\nSign-off:\\nUjjwal Roy\\nCEO, ScaleBuild AI\\n\\nReturn ONLY the message text. No markdown. No subject line.`\n    }]\n  }],\n  \"generationConfig\": { \"maxOutputTokens\": 1024, \"temperature\": 0.7 }\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  \"model\": \"claude-opus-4-5\",\n  \"max_tokens\": 1024,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": `You are writing as Ujjwal Roy, CEO of ScaleBuild AI (Junkiri Labs LLC).\\n\\nLEAD:\\nTitle: ${$json.title || $json['Title'] || ''}\\nSummary: ${$json.ai_summary || $json['AI Summary'] || ''}\\nCompany: ${$json.lead_company || $json['Lead Company'] || 'Unknown'}\\nIndustry: ${$json.industry || $json['Industry'] || 'Unknown'}\\nTech Requirements: ${($json.tech_stack || []).join(', ') || $json['Tech Stack'] || 'Not specified'}\\nRelevant ScaleBuild Capabilities: Custom AI/ML models, computer vision for manufacturing and security, enterprise workflow automation, full-stack SaaS development, data pipelines\\n\\nWrite a LinkedIn outreach message following this EXACT structure:\\n\\n1. HOOK (1-2 sentences): Reference their specific pain point or need directly. Make it personal and precise.\\n2. CREDENTIALS (2-3 sentences): Mention ScaleBuild AI builds custom AI/ML models, computer vision systems for manufacturing and security, and enterprise automation. Reference ex-Intel/IBM/Micron engineering background and shipped production systems.\\n3. SOFT CTA (1 sentence): Low-pressure ask — happy to connect or have a quick conversation if relevant.\\n\\nRULES:\\n- 150-200 words total\\n- Tone: direct, confident, no fluff, human-sounding, like one founder to another\\n- NO em dashes\\n- NO exclamation marks\\n- Do not start with \\\"I hope\\\" or generic openers\\n\\nSign-off:\\nUjjwal Roy\\nCEO, ScaleBuild AI\\n\\nReturn ONLY the message text. No markdown. No subject line.`\n  }]\n}) }}",
         "options": {
           "timeout": 30000
         }
       },
       "id": "claude-outreach-li",
-      "name": "Gemini - Generate Outreach",
+      "name": "Claude - Generate Outreach",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -361,7 +365,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const geminiResp = $input.item.json;\nconst original = $('Loop Over Leads').item.json;\nconst draft = geminiResp.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'Outreach generation failed';\nreturn [{ json: { ...original, outreach_draft: draft } }];"
+        "jsCode": "const claudeResp = $input.item.json;\nconst original = $('Loop Over Leads').item.json;\nconst draft = claudeResp.content?.[0]?.text?.trim() || 'Outreach generation failed';\nreturn [{ json: { ...original, outreach_draft: draft } }];"
       },
       "id": "parse-outreach-li",
       "name": "Parse Outreach Draft",
@@ -371,60 +375,6 @@
         928,
         128
       ]
-    },
-    {
-      "parameters": {
-        "select": "channel",
-        "channelId": {
-          "__rl": true,
-          "value": "#dealhunter-alerts",
-          "mode": "name"
-        },
-        "text": "={{ (function(){\n  const d = $('Parse Outreach Draft').item.json;\n  const score = d.overall_score || d['Overall Score'] || 0;\n  const sourceLabel = d.source === 'linkedin_jobs' ? 'LinkedIn Job/Contract' : 'LinkedIn Post';\n  return '\\ud83d\\udea8 *' + sourceLabel.toUpperCase() + ' HIGH-VALUE LEAD* (Score: ' + score + ')\\n\\n' +\n    '*' + (d.title || d['Title']) + '*\\n' +\n    (d.lead_company || d['Lead Company'] ? '\\ud83c\\udfe2 ' + (d.lead_company || d['Lead Company']) + '\\n' : '') +\n    'Industry: ' + (d.industry || d['Industry'] || 'Unknown') + '\\n\\n' +\n    '*AI Summary:*\\n' + (d.ai_summary || d['AI Summary'] || '') + '\\n\\n' +\n    '\\ud83d\\udcca Relevance: ' + (d.relevance_score || d['Relevance Score']) + ' | Budget: ' + (d.budget_score || d['Budget Score']) + ' | Win Prob: ' + (d.win_probability || d['Win Probability']) + '\\n' +\n    '\\ud83d\\udcb0 Budget: ' + (d.estimated_budget_text || d['Budget Mentioned'] || 'Not mentioned') + '\\n\\n' +\n    '<' + (d.source_url || d['Source URL']) + '|View on LinkedIn>\\n\\n' +\n    '*\\ud83d\\udcac LinkedIn Outreach Message (Claude):*\\n' + (d.outreach_draft || '');\n})() }}",
-        "otherOptions": {}
-      },
-      "id": "slack-li",
-      "name": "Slack - Instant Alert",
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 2.2,
-      "position": [
-        1168,
-        -48
-      ],
-      "webhookId": "b221b58c-acdf-48e8-a77d-1f2820f1dcee",
-      "credentials": {
-        "slackApi": {
-          "id": "12yhiaMJlTGLSK74",
-          "name": "Slack account"
-        }
-      },
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "fromEmail": "deshpane834@gmail.com",
-        "toEmail": "deshpane834@gmail.com",
-        "subject": "=\\ud83d\\udd17 LinkedIn Lead [{{ $('Parse Outreach Draft').item.json['overall_score'] || $('Parse Outreach Draft').item.json['Overall Score'] }}] - {{ ($('Parse Outreach Draft').item.json['title'] || $('Parse Outreach Draft').item.json['Title'] || '').substring(0,60) }}",
-        "options": {
-          "appendAttribution": false
-        }
-      },
-      "id": "email-li",
-      "name": "Email - Instant Alert",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2.1,
-      "position": [
-        1168,
-        128
-      ],
-      "webhookId": "2760fafa-5075-44ec-8c6c-dfe465b1b6b0",
-      "credentials": {
-        "smtp": {
-          "id": "FNx0wyiO1TAuFQu3",
-          "name": "SMTP account"
-        }
-      },
-      "continueOnFail": true
     },
     {
       "parameters": {
@@ -605,16 +555,6 @@
       "main": [
         [
           {
-            "node": "Slack - Instant Alert",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Email - Instant Alert",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Update Sheet - Outreach Draft",
             "type": "main",
             "index": 0
@@ -631,16 +571,6 @@
             "index": 0
           }
         ]
-      ]
-    },
-    "Slack - Instant Alert": {
-      "main": [
-        []
-      ]
-    },
-    "Email - Instant Alert": {
-      "main": [
-        []
       ]
     },
     "Gemini - Score & Parse": {

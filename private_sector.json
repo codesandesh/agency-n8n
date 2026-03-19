@@ -1,0 +1,621 @@
+{
+  "name": "DealHunter - Private Sector RFP Aggregators",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "cron-private-rfp",
+      "name": "Cron - Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1040,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-private-rfp",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1040,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const queries = [\n  // === RFPZONE.COM — private sector filter ===\n  { q: 'site:rfpzone.com \"AI\" OR \"machine learning\" OR \"automation\" OR \"software development\"', platform: 'rfpzone' },\n  { q: 'site:rfpzone.com \"technology\" OR \"data\" OR \"software\" \"private sector\" OR \"corporate\"', platform: 'rfpzone' },\n  { q: 'site:rfpzone.com \"custom software\" OR \"AI development\" OR \"data pipeline\" OR \"enterprise software\"', platform: 'rfpzone' },\n\n  // === INSTANTMARKETS.COM — private sector filter ===\n  { q: 'site:instantmarkets.com \"AI\" OR \"machine learning\" OR \"automation\" OR \"software\"', platform: 'instantmarkets' },\n  { q: 'site:instantmarkets.com \"technology\" OR \"data\" OR \"software development\" OR \"enterprise\"', platform: 'instantmarkets' },\n  { q: 'site:instantmarkets.com \"custom software\" OR \"AI\" OR \"SaaS\" OR \"platform development\"', platform: 'instantmarkets' },\n\n  // === FINDRFP.COM — corporate section ===\n  { q: 'site:findrfp.com \"AI\" OR \"machine learning\" OR \"automation\" OR \"software development\"', platform: 'findrfp' },\n  { q: 'site:findrfp.com \"technology\" OR \"data analytics\" OR \"software\" corporate OR private', platform: 'findrfp' },\n  { q: 'site:findrfp.com \"SaaS\" OR \"enterprise software\" OR \"data pipeline\" OR \"computer vision\"', platform: 'findrfp' },\n\n  // === RFPDB.COM — RFP Database ===\n  { q: 'site:rfpdb.com \"AI\" OR \"machine learning\" OR \"automation\" OR \"software development\"', platform: 'rfpdb' },\n  { q: 'site:rfpdb.com \"technology\" OR \"data\" OR \"analytics\" \"private\" OR \"corporate\"', platform: 'rfpdb' },\n  { q: 'site:rfpdb.com \"custom software\" OR \"AI development\" OR \"SaaS\" OR \"enterprise software\"', platform: 'rfpdb' }\n];\nreturn queries.map(q => ({ json: q }));"
+      },
+      "id": "build-queries-rfp",
+      "name": "Build RFP Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "num",
+              "value": "10"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.SERPAPI_KEY }}"
+            },
+            {
+              "name": "engine",
+              "value": "google"
+            },
+            {
+              "name": "gl",
+              "value": "us"
+            },
+            {
+              "name": "hl",
+              "value": "en"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "serpapi-rfp",
+      "name": "SerpAPI - RFP Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -560,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const skipKeywords = [\n  'agency directory', 'top agencies', 'best agencies', 'find agencies',\n  'compare agencies', 'agency profile', 'government rfp', 'federal contract',\n  'state government', 'county government', 'municipal', 'school district',\n  'for hire', 'logo design', 'seo services', 'social media manager',\n  'content writer', 'virtual assistant', 'data entry', 'graphic design'\n];\n\nconst platformMap = {\n  'rfpzone.com': 'rfpzone',\n  'instantmarkets.com': 'instantmarkets',\n  'findrfp.com': 'findrfp',\n  'rfpdb.com': 'rfpdb'\n};\n\nconst budgetPatterns = [\n  /budget[:\\s]+([\\$€£][\\d,k.]+[\\s\\w-]*)/i,\n  /([\\$€£][\\d,]+(?:,\\d{3})*(?:k)?(?:\\s[-–]\\s*[\\$€£]?[\\d,]+(?:k)?)?(?:\\s*(?:USD|EUR|GBP))?)/i,\n  /(\\d+[kK][\\s-–]+(\\d+[kK]))/,\n  /([\\$€£]\\d+(?:\\.\\d+)?[kK])/i\n];\n\nconst results = [];\nconst seenInRun = new Set();\n\nfor (const item of $input.all()) {\n  const data = item.json;\n  if (!data || data.error) continue;\n\n  const searchQ = data.search_parameters?.q || '';\n  const organicResults = data.organic_results || [];\n\n  // Detect platform from query\n  let platform = 'unknown';\n  for (const [domain, pname] of Object.entries(platformMap)) {\n    if (searchQ.includes(domain)) { platform = pname; break; }\n  }\n\n  for (const r of organicResults) {\n    const link = r.link || '';\n    if (!link) continue;\n\n    // Detect platform from actual URL if still unknown\n    let actualPlatform = platform;\n    if (actualPlatform === 'unknown') {\n      for (const [domain, pname] of Object.entries(platformMap)) {\n        if (link.includes(domain)) { actualPlatform = pname; break; }\n      }\n    }\n    if (actualPlatform === 'unknown') continue;\n\n    const id = actualPlatform + '_' + link.replace(/[^a-z0-9]/gi, '').slice(-60);\n    if (seenInRun.has(id)) continue;\n    seenInRun.add(id);\n\n    const title   = String(r.title   || '').substring(0, 500);\n    const snippet = String(r.snippet || '').replace(/<[^>]*>/g, '').substring(0, 3000);\n    if (!title) continue;\n\n    const fullText = (title + ' ' + snippet).toLowerCase();\n    if (skipKeywords.some(kw => fullText.includes(kw))) continue;\n\n    // Extract budget from snippet\n    let budget_text = '';\n    for (const pat of budgetPatterns) {\n      const m = (snippet + ' ' + title).match(pat);\n      if (m) { budget_text = (m[1] || m[0]).trim().substring(0, 80); break; }\n    }\n\n    results.push({ json: {\n      title,\n      description: snippet,\n      source: actualPlatform,\n      source_url: link,\n      source_id: id,\n      posted_at: (() => { try { const d = r.date ? new Date(r.date) : null; return (d && !isNaN(d)) ? d.toISOString() : new Date().toISOString(); } catch(e) { return new Date().toISOString(); } })(),\n      author: '',\n      subreddit: actualPlatform,\n      upvotes: 0,\n      num_comments: 0,\n      flair_text: 'Private RFP',\n      budget_text,\n      platform: actualPlatform\n    }});\n  }\n}\n\nif (results.length === 0) return [{ json: { _empty: true, platform: 'private-rfp' } }];\n// Cap at 30 leads per run to avoid Gemini rate-limit timeouts\nreturn results.slice(0, 30);"
+      },
+      "id": "normalize-rfp",
+      "name": "Normalize - RFP Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const post = $input.item.json;\nif (post._empty || post._noData) return { json: post };\n\nconst apiKey = $env.GOOGLE_AI_API_KEY;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, custom software, data pipelines.\n\nThese leads are PRIVATE SECTOR RFPs (Requests for Proposals) sourced from RFP aggregator platforms (RFPZone, InstantMarkets, FindRFP, RFPdb). These are formal procurement requests from private companies actively seeking software/technology vendors.\n\nIDEAL LEAD: A private company RFP explicitly seeking AI, ML, automation, custom software, data pipeline, or enterprise technology services.\n\nHARD EXCLUSIONS — Score overall_score 0.0 immediately, do not process:\n- Lead is from India or an Indian company (location: India, .in domain, Indian city/company name context) → 0.0\n- Lead is requesting to build a SaaS subscription product (we do NOT build SaaS products) → 0.0  \n- Budget is clearly under $10,000 OR budget_score would be below 0.3 → 0.0\n- Individual freelancer or [For Hire] ad → 0.0\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 1.0=explicit AI/ML/automation RFP | 0.8=custom software/enterprise tech RFP | 0.6=general IT/software RFP | 0.3=tangential tech (security/network) | 0.0=non-tech or government RFP\n2. budget_score: 1.0=$500K+ | 0.9=$200-500K | 0.8=$100-200K | 0.7=$50-100K | 0.6=$25-50K | 0.5=unknown but enterprise context | 0.3=$10-25K | 0.1=<$10K\n3. urgency_score: 1.0=deadline this week/imminent | 0.8=deadline within 1 month | 0.6=proposals open now | 0.4=no deadline mentioned but active | 0.2=closed or archived\n4. win_probability: 0.9+=small company RFP with perfect AI/ML fit | 0.8=mid-market RFP, strong fit | 0.7=competitive but good fit | 0.5=enterprise RFP, many vendors | 0.3=large enterprise, hard to win | 0.1=no fit\n\nBUDGET ESTIMATION (ALWAYS fill estimated_budget_text, never null):\n- Enterprise RFP ($500M+ company) → \"$200K-$2M (enterprise procurement)\"\n- Mid-market RFP → \"$50K-$500K (mid-market scope)\"\n- Startup/SMB RFP → \"$25K-$150K (SMB scope)\"\n- AI/ML project RFP → \"$75K-$500K (AI/ML engagement)\"\n- Automation/workflow RFP → \"$50K-$300K (automation scope)\"\n- Unknown budget → \"$50K-$300K (estimated private sector RFP)\"\n\nCOMPANY EXTRACTION: Extract company name, contact name, website from title/snippet/URL. Never invent. Return null if not found.`;\n\nconst prompt = SYSTEM_PROMPT + `\\n\\nScore this private sector RFP. Return ONLY a single valid JSON object:\\n{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"3-5 sentence detailed summary: what the company is seeking, the scope of work, deadline if mentioned, and why ScaleBuild AI is the right fit\",\"industry\":\"FinTech/HealthTech/SaaS/Manufacturing/eCommerce/Energy/Logistics/General\",\"tags\":[\"tag1\",\"tag2\"],\"reasoning\":\"Full detailed AI reasoning: explain each score dimension — why this relevance, why this budget score, why this urgency, why this win probability. What specific signals make this a strong or weak lead. Recommended outreach angle and proposal approach.\",\"estimated_budget_text\":\"$X-$Y (reason)\",\"rfp_deadline\":null,\"rfp_scope\":\"brief scope summary\",\"tech_stack\":[],\"company_name\":null,\"lead_founder_name\":null,\"lead_website\":null}\\n\\nTitle: ${post.title}\\nPlatform: ${post.source}\\nDescription: ${(post.description||'').substring(0, 1200)}${post.budget_text ? '\\nBudget: ' + post.budget_text : ''}`;\n\nconst body = {\n  contents: [{ parts: [{ text: prompt }] }],\n  generationConfig: { maxOutputTokens: 100000, temperature: 0.2, responseMimeType: 'application/json' }\n};\n\nlet s = null;\ntry {\n  const respRaw = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n    body\n  });\n  const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n  const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (match) s = JSON.parse(match[0]);\n} catch(e) {}\n\nif (!s) s = {\n  relevance_score:0.4, budget_score:0.5, urgency_score:0.3, win_probability:0.3,\n  summary:'Parse error - using defaults', industry:'General', tags:[], reasoning:'Could not parse Gemini response',\n  estimated_budget_text:'$50K-$300K (estimated private sector RFP)',\n  rfp_deadline:null, rfp_scope:'Unknown scope',\n  tech_stack:[], company_name:null, lead_founder_name:null, lead_website:null\n};\n\nconst overall = Math.round(((s.relevance_score*0.35)+(s.budget_score*0.30)+(s.urgency_score*0.15)+(s.win_probability*0.20))*100)/100;\nconst alert_tier = overall>=0.85?'instant':overall>=0.70?'digest':overall>=0.30?'dashboard':'discard';\n\nreturn { json: {\n  source_id: post.source_id, title: post.title, description: post.description,\n  source: post.source, source_url: post.source_url, posted_at: post.posted_at,\n  author: post.author||'', subreddit: post.subreddit||post.source||'',\n  upvotes: 0, num_comments: 0, flair_text: 'Private RFP',\n  relevance_score: s.relevance_score, budget_score: s.budget_score,\n  urgency_score: s.urgency_score, win_probability: s.win_probability,\n  overall_score: overall, ai_summary: s.summary, industry: s.industry,\n  ai_tags: s.tags||[], ai_reasoning: s.reasoning,\n  estimated_budget_text: s.estimated_budget_text||'',\n  budget_mentioned: post.budget_text || s.estimated_budget_text || '',\n  tech_stack: s.tech_stack||[], company_name: s.company_name||null,\n  lead_founder: s.lead_founder_name||null, lead_company: s.company_name||null,\n  lead_website: s.lead_website||null, lead_contact: null,\n  lead_score: Math.round(overall*10),\n  alert_tier, discovered_at: new Date().toISOString(), status:'new',\n  location: s.location||null, deadline_text: s.rfp_deadline||null,\n  outreach_draft: '',\n  hunter_name:'', hunter_email:'', hunter_title:'', hunter_company:'',\n  hunter_all_emails:'', hunter_all_names:'', hunter_all_titles:''\n}};"
+      },
+      "id": "gemini-rfp",
+      "name": "Gemini - Score & Parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-score",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-lead-info-rfp",
+      "name": "Check - Has Lead Info",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-real-company",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.lead_website || $json.lead_company || $json.company_name || '' }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-company-signal-rfp",
+      "name": "Check - Has Company Signal",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.hunter.io/v2/domain-search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "={{ $json.lead_website ? 'domain' : 'company' }}",
+              "value": "={{ $json.lead_website ? ($json.lead_website).replace(/^https?:\\/\\/(www\\.)?/, '').split('/')[0] : ($json.lead_company||'') }}"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.HUNTER_API_KEY }}"
+            },
+            {
+              "name": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "hunter-rfp",
+      "name": "Hunter - Enrich Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -160
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const hunterResp = $input.item.json;\nconst original = $('Check - Has Lead Info').item.json;\nconst data = hunterResp?.data || {};\nconst emails = data.emails || [];\nconst org = data.organization || original.lead_company || '';\n\nif (emails.length === 0) {\n  return [{ json: { ...original, hunter_name: '', hunter_email: '', hunter_title: '', hunter_company: org, hunter_all_emails: '', hunter_all_names: '', hunter_all_titles: '' } }];\n}\n\n// Pick best contact by seniority priority\nconst priority = ['ceo','founder','co-founder','cto','owner','president','vp','director'];\nconst best = emails.find(e => priority.some(t => (e.position||'').toLowerCase().includes(t))) || emails[0];\n\n// Collect all emails, names, titles as comma-separated\nconst allEmails  = emails.map(e => e.value || '').filter(Boolean).join(', ');\nconst allNames   = emails.map(e => (e.first_name||e.last_name) ? `${e.first_name||''} ${e.last_name||''}`.trim() : '').filter(Boolean).join(', ');\nconst allTitles  = emails.map(e => e.position || '').filter(Boolean).join(', ');\n\nreturn [{ json: {\n  ...original,\n  hunter_name:       best.first_name || best.last_name ? `${best.first_name||''} ${best.last_name||''}`.trim() : '',\n  hunter_email:      best.value || '',\n  hunter_title:      best.position || '',\n  hunter_company:    org,\n  hunter_all_emails: allEmails,\n  hunter_all_names:  allNames,\n  hunter_all_titles: allTitles\n}}];"
+      },
+      "id": "parse-hunter-rfp",
+      "name": "Parse Hunter Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, enrichment_source: 'hunter-miss' } }));"
+      },
+      "id": "flag-hunter-miss-rfp",
+      "name": "Flag - Hunter Miss",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-email-exists",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.hunter_email }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-hunter-email-rfp",
+      "name": "Check - Hunter Has Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return [{ json: { ...$input.item.json, hunter_name:'', hunter_email:'', hunter_title:'', hunter_company:'', hunter_all_emails:'', hunter_all_names:'', hunter_all_titles:'' }}];"
+      },
+      "id": "set-empty-hunter-rfp",
+      "name": "Set Empty Hunter Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const seen = new Map();\nfor (const item of $input.all()) {\n  const id = item.json.source_id;\n  if (!id) continue;\n  if (!seen.has(id)) {\n    seen.set(id, item.json);\n  } else {\n    if (item.json.hunter_email && !seen.get(id).hunter_email) {\n      seen.set(id, item.json);\n    }\n  }\n}\nreturn [...seen.values()]\n  .sort((a, b) => (b.overall_score||0) - (a.overall_score||0))\n  .map(json => ({ json }));"
+      },
+      "id": "dedup-rfp",
+      "name": "Dedup by Source ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "score-check",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0.8
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-rfp",
+      "name": "Filter - Score >= 0.80",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Opportunities"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Source ID": "={{ $json.source_id }}",
+            "Title": "={{ $json.title }}",
+            "Subreddit": "={{ $json.subreddit }}",
+            "Source URL": "={{ $json.source_url }}",
+            "Posted At": "={{ $json.posted_at }}",
+            "Discovered At": "={{ $json.discovered_at }}",
+            "Author": "={{ $json.author }}",
+            "Overall Score": "={{ $json.overall_score }}",
+            "Relevance Score": "={{ $json.relevance_score }}",
+            "Budget Score": "={{ $json.budget_score }}",
+            "Urgency Score": "={{ $json.urgency_score }}",
+            "Win Probability": "={{ $json.win_probability }}",
+            "Alert Tier": "={{ $json.alert_tier }}",
+            "Industry": "={{ $json.industry }}",
+            "AI Summary": "={{ $json.ai_summary }}",
+            "AI Tags": "={{ ($json.ai_tags||[]).join(', ') }}",
+            "Tech Stack": "={{ ($json.tech_stack||[]).join(', ') }}",
+            "Budget Mentioned": "={{ $json.budget_mentioned }}",
+            "Location": "={{ $json.location }}",
+            "Upvotes": "={{ $json.upvotes }}",
+            "Comments": "={{ $json.num_comments }}",
+            "Status": "new",
+            "AI Reasoning": "={{ $json.ai_reasoning }}",
+            "Lead Founder": "={{ $json.lead_founder||'' }}",
+            "Lead Company": "={{ $json.lead_company||'' }}",
+            "Lead Website": "={{ $json.lead_website||'' }}",
+            "Lead Contact": "={{ $json.lead_contact||'' }}",
+            "Lead Score": "={{ $json.lead_score||'' }}",
+            "Hunter Name": "={{ $json.hunter_name||'' }}",
+            "Hunter Email": "={{ $json.hunter_email||'' }}",
+            "Hunter Title": "={{ $json.hunter_title||'' }}",
+            "Hunter Company": "={{ $json.hunter_company||'' }}"
+          },
+          "matchingColumns": [
+            "Source ID"
+          ],
+          "schema": [
+            {
+              "id": "Source ID",
+              "displayName": "Source ID",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheet-rfp",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1920,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HopOeXjaGgSku8RO",
+          "name": "Google Sheets account"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron - Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Build RFP Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build RFP Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build RFP Queries": {
+      "main": [
+        [
+          {
+            "node": "SerpAPI - RFP Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI - RFP Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize - RFP Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize - RFP Results": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Score & Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Score & Parse": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Lead Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Lead Info": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Company Signal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Empty Hunter Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Company Signal": {
+      "main": [
+        [
+          {
+            "node": "Hunter - Enrich Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag - Hunter Miss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hunter - Enrich Lead": {
+      "main": [
+        [
+          {
+            "node": "Parse Hunter Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Hunter Response": {
+      "main": [
+        [
+          {
+            "node": "Check - Hunter Has Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Hunter Has Email": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag - Hunter Miss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag - Hunter Miss": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Empty Hunter Fields": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup by Source ID": {
+      "main": [
+        [
+          {
+            "node": "Filter - Score >= 0.55",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter - Score >= 0.55": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "private-sector-rfp-v1",
+  "meta": {
+    "instanceId": "bfa881661c018749d441660d36f63fdf552d02437db15de1ed54bb7a572d9e36"
+  },
+  "id": "dealhunter-private-rfp",
+  "tags": []
+}

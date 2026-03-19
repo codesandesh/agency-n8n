@@ -1,0 +1,1081 @@
+{
+  "name": "DealHunter - Freelance Marketplaces (Same Sheet)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron - Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1322681649,
+          "mode": "list",
+          "cachedResultName": "Enhanced Business Profile",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit#gid=1322681649"
+        },
+        "options": {}
+      },
+      "id": "get-business-profile",
+      "name": "Get Business Profile",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -1360,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HopOeXjaGgSku8RO",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nconst profile = {};\nfor (const row of rows) {\n  const key = row.json['Field Name (do not edit)'];\n  const value = row.json['Your Value ✏️  Edit this column'];\n  if (key !== undefined && key !== null && key !== '') {\n    profile[String(key)] = value !== undefined && value !== null ? String(value) : '';\n  }\n}\nreturn [{ json: profile }];"
+      },
+      "id": "parse-business-profile",
+      "name": "Parse Business Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const profile = $input.first().json;\nconst profession = profile.profession || 'AI/ML software development';\nconst services = profile.primary_services || 'custom software, AI automation';\n\nconst searchQueries = [\n  'custom software development',\n  'AI ML development',\n  'machine learning project',\n  'computer vision project',\n  'enterprise automation',\n  'SaaS development',\n  'workflow automation',\n  'full stack development'\n];\n\nconst keywordsSkip = [\n  '[for hire]','for hire]','wordpress theme','shopify theme','logo design',\n  'SEO services','social media management','content writing','virtual assistant',\n  'data entry','graphic design','video editing','copywriting','i am available',\n  'available for hire','seeking clients','my portfolio','i offer',\n  'my services include','hire me','looking for work','seeking employment',\n  'i will ','i am ready','hi client','with expertise in','i will design',\n  'i will develop','i will build','i will create','i can help you',\n  'my approach','i have experience','years of experience in','i specialize'\n];\n\n// UPWORK RSS sources\nconst upworkSources = searchQueries.map(q => ({\n  platform: 'upwork',\n  priority: 'critical',\n  method: 'rss',\n  url: `https://www.upwork.com/ab/feed/jobs/rss?q=${encodeURIComponent(q)}&sort=recency&paging=0%3B10`,\n  query: q\n}));\n\nconst freelancerSources = [\n  { platform: 'freelancer', method: 'serpapi', query: 'site:freelancer.com/projects \"enterprise\" \"AI\" OR \"automation\" OR \"SaaS\"' },\n  { platform: 'freelancer', method: 'serpapi', query: 'site:freelancer.com/projects \"AI\" \"$10,000\" OR \"$20,000\" OR \"$50,000\" OR \"$100,000\"' },\n  { platform: 'freelancer', method: 'serpapi', query: 'site:freelancer.com/projects \"build\" \"AI platform\" OR \"ML system\" OR \"computer vision system\"' },\n  { platform: 'freelancer', method: 'serpapi', query: 'site:freelancer.com/projects \"AI development\" OR \"AI integration\" \"company\" OR \"business\" OR \"startup\"' }\n];\n\nconst guruSources = [\n  { platform: 'guru', method: 'serpapi', query: 'site:guru.com/jobs \"enterprise\" OR \"company\" \"AI\" OR \"automation\" OR \"machine learning\"' },\n  { platform: 'guru', method: 'serpapi', query: 'site:guru.com/jobs \"AI integration\" OR \"AI development\" OR \"computer vision\" OR \"data pipeline\"' },\n  { platform: 'guru', method: 'serpapi', query: 'site:guru.com/jobs \"build\" \"AI\" OR \"ML\" OR \"automation system\" OR \"SaaS platform\"' },\n  { platform: 'guru', method: 'serpapi', query: 'site:guru.com/jobs \"Fixed Price\" \"AI\" OR \"machine learning\" OR \"computer vision\" OR \"data pipeline\"' }\n];\n\n// PeoplePerHour removed - low signal, matches freelancer profiles not job content\nconst pphSources = [];\n\n// CONTRA sources\nconst contraSources = [\n  { platform: 'contra', priority: 'medium', method: 'scrape', url: 'https://contra.com/opportunities?category=engineering', query: 'engineering' },\n  { platform: 'contra', priority: 'medium', method: 'scrape', url: 'https://contra.com/opportunities?category=software-development', query: 'software development' }\n];\n\n// TOPTAL source\nconst toptalSources = [\n  { platform: 'toptal', priority: 'high', method: 'scrape', url: 'https://www.toptal.com/talent/apply', query: 'all projects' }\n];\n\n// FIVERR source\nconst fiverrSources = [\n  { platform: 'fiverr', priority: 'low', method: 'scrape', url: 'https://www.fiverr.com/categories/programming-tech/software-development', query: 'software development' }\n];\n\n// CODEABLE source\nconst codeableSources = [\n  { platform: 'codeable', priority: 'low', method: 'scrape', url: 'https://codeable.io/wordpress-developers/', query: 'wordpress development' }\n];\n\nreturn [{ json: {\n  upworkSources,\n  freelancerSources,\n  guruSources,\n\n  contraSources,\n  toptalSources,\n  fiverrSources,\n  codeableSources,\n  keywordsSkip,\n  businessProfile: profile,\n  searchQueries\n}}];"
+      },
+      "id": "build-scrape-config",
+      "name": "Build Scrape Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// EXTENDED SERP QUERIES — extra Guru + Freelancer angles\n// Replaces broken Contra/Toptal/Fiverr/Codeable scrapers\n// ============================================================\nconst config = $('Build Scrape Config').first().json;\nconst serpKey = $env.SERPAPI_KEY;\n\nconst extraQueries = [\n  // Extra Guru angles\n  { q: 'site:guru.com/jobs \"AI agent\" OR \"AI chatbot\" OR \"LLM\" OR \"OpenAI\" OR \"AI workflow\"', platform: 'guru' },\n  { q: 'site:guru.com/jobs \"python\" \"AI\" OR \"machine learning\" OR \"data pipeline\" OR \"automation\"', platform: 'guru' },\n  // Extra Freelancer angles\n  { q: 'site:freelancer.com/projects \"LLM\" OR \"GPT\" OR \"langchain\" OR \"AI agent\" OR \"RAG\"', platform: 'freelancer' },\n  { q: 'site:freelancer.com/projects \"automation\" \"n8n\" OR \"make.com\" OR \"zapier\" OR \"workflow automation\"', platform: 'freelancer' },\n  // Truelancer - new source, good Google indexing\n  { q: 'site:truelancer.com/freelance-project \"AI\" OR \"machine learning\" OR \"automation\" OR \"LLM\"', platform: 'truelancer' },\n  { q: 'site:truelancer.com/freelance-project \"AI agent\" OR \"AI development\" OR \"workflow automation\" OR \"n8n\"', platform: 'truelancer' }\n];\n\nconst withTimeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms))]);\nconst keywordsSkip = config.keywordsSkip || [];\n\nconst results = [];\nconst seen = new Set();\n\nfor (const qObj of extraQueries) {\n  let resp;\n  try {\n    resp = await withTimeout(\n      this.helpers.httpRequest({\n        method: 'GET',\n        url: 'https://serpapi.com/search.json',\n        qs: { q: qObj.q, num: 10, api_key: serpKey, engine: 'google', gl: 'us', hl: 'en' }\n      }),\n      20000\n    );\n  } catch(e) { continue; }\n\n  const organicResults = resp?.organic_results || [];\n  for (const r of organicResults) {\n    if (!r.link) continue;\n    const platform = qObj.platform;\n    // URL filter\n    if (platform === 'freelancer' && !r.link.includes('freelancer.com/projects/')) continue;\n    if (platform === 'guru'       && !r.link.includes('guru.com/jobs/'))           continue;\n    if (platform === 'truelancer'  && !r.link.includes('truelancer.com/freelance-project/')) continue;\n\n    const id = platform + '_' + Buffer.from(r.link).toString('base64').substring(0, 24);\n    if (seen.has(id)) continue;\n    seen.add(id);\n\n    const title   = String(r.title   || '').substring(0, 500);\n    const snippet = String(r.snippet || '').replace(/<[^>]*>/g, '').substring(0, 3000);\n    if (!title) continue;\n\n    const fullText = (title + ' ' + snippet).toLowerCase();\n    if (keywordsSkip.some(kw => fullText.includes(kw.toLowerCase()))) continue;\n\n    const lowBudgetSignals = ['₹', 'rs.', 'inr', '$750-1500 usd', '$250-750 usd', '$150-300 usd', '$30-250 usd'];\n    if (lowBudgetSignals.some(s => snippet.toLowerCase().includes(s))) continue;\n\n    results.push({ json: {\n      title,\n      description: snippet,\n      source: platform,\n      source_url: r.link,\n      source_id: id,\n      posted_at: r.date ? new Date(r.date).toISOString() : new Date().toISOString(),\n      author: '', subreddit: platform, upvotes: 0, num_comments: 0,\n      flair_text: '', budget_text: '', platform\n    }});\n  }\n}\n\nif (results.length === 0) return [{ json: { _empty: true, platform: 'extra-serp' } }];\nreturn results;"
+      },
+      "id": "scrape-others",
+      "name": "Scrape - Contra/Toptal/Fiverr/Codeable",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// NORMALIZE TO RawOpportunity - EXACT SAME FORMAT AS ORIGINAL\n// ============================================================\nconst config = $('Build Scrape Config').first().json;\nconst keywordsSkip = config.keywordsSkip || [];\nconst rawItems = $input.all();\nconst results = [];\nconst seenInRun = new Set();\n\nfor (const item of rawItems) {\n  if (!item.json || typeof item.json !== 'object') continue;\n  const post = item.json;\n\n  try {\n    if (post._empty || post._noData) continue;\n    const postTitle = String(post.title || '').substring(0, 500);\n    if (!postTitle) continue;\n    const postId = String(post.source_id || (post.platform + '_' + Buffer.from(postTitle).toString('base64').substring(0, 16)));\n    if (seenInRun.has(postId)) continue;\n    seenInRun.add(postId);\n    const postBody = String(post.description || '');\n    const fullText = (postTitle + ' ' + postBody).toLowerCase();\n    if (keywordsSkip.some(kw => fullText.includes(kw.toLowerCase()))) continue;\n\n    results.push({ json: {\n      title: postTitle,\n      description: postBody.substring(0, 3000),\n      source: post.source || post.platform || 'unknown',\n      source_url: post.source_url || '',\n      source_id: postId,\n      posted_at: post.posted_at || new Date().toISOString(),\n      author: post.author || '',\n      subreddit: post.platform || '',\n      upvotes: post.upvotes || 0,\n      num_comments: post.num_comments || 0,\n      flair_text: post.flair_text || '',\n      budget_text: post.budget_text || ''\n    }});\n  } catch(e) {\n    console.error('[Normalize] Failed:', e.message);\n  }\n}\n\nif (results.length === 0) return [];\nreturn results;"
+      },
+      "id": "normalize-posts",
+      "name": "Normalize to RawOpportunity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const posts = $input.all().map(i => i.json).filter(p => p && p.title && !p._noData);\nif (posts.length === 0) return [];\n\nconst apiKey = $env.GOOGLE_AI_API_KEY;\nconst BATCH_SIZE = 5;\nconst BETWEEN_BATCH_DELAY_MS = 1500;\nconst MAX_RETRIES = 2;\nconst CALL_TIMEOUT_MS = 120000;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, custom software, data pipelines.\n\nIDEAL LEAD: Founder/CTO/SMB owner with a business PROBLEM needing custom software. Pain point posts are HIGH VALUE.\n\nHARD EXCLUSIONS — Score overall_score 0.0 immediately, do not process:\n- Lead is from India or an Indian company (location: India, .in domain, Indian city/company name context) → 0.0\n- Lead is requesting to build a SaaS subscription product (we do NOT build SaaS products) → 0.0  \n- Budget is clearly under $10,000 OR budget_score would be below 0.3 → 0.0\n- Individual freelancer or [For Hire] ad → 0.0\n\nGOOD LEAD EXAMPLES:\n- \"compliance audits take weeks\" → needs automation → HIGH\n- \"we outgrew our no-code tool\" → needs custom dev → HIGH\n- \"evaluating dev shops\" → MEDIUM\n- \"I built a meme AI\" → 0.0\n- Individual [For Hire] ad → 0.0\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 0.9+=clear AI/automation need | 0.7-0.8=business pain point | 0.5-0.6=startup needs tech help | 0.0-0.2=irrelevant\n2. budget_score: 1.0=$50K+ | 0.8=$10-50K | 0.6=$5-10K | 0.4=$2-5K | 0.2=<$2K | 0.6=unknown but substantial scope described | 0.5=unknown budget no scope\n3. urgency_score: 1.0=this week/ASAP | 0.8=within 1 month | 0.6=actively seeking proposals (open job post, quotes open) | 0.4=3-6 months | 0.2=passive/no timeline\n4. win_probability: 0.9+=agency explicitly sought | 0.8=company/business posting with substantial budget ($5k+) | 0.6-0.7=company posting budget unclear | 0.4=unclear individual vs team | 0.2=explicitly wants solo freelancer | 0.0=no fit\n\nCOMPANY EXTRACTION:\n- Scan title AND description for company name, product name, website URL\n- Any URL becomes lead_website (domain only)\n- No name found? Return null. Never invent names.\n- lead_founder_name: use person name in post or username`;\n\nconst callGeminiWithRetry = async (prompt) => {\n  const body = {\n    contents: [{ parts: [{ text: prompt }] }],\n    generationConfig: { maxOutputTokens: 10000, temperature: 0.2, responseMimeType: 'application/json' }\n  };\n  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {\n    try {\n      const result = await Promise.race([\n        this.helpers.httpRequest({\n          method: 'POST',\n          url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n          body\n        }),\n        new Promise((_, reject) => setTimeout(() => reject(new Error('call_timeout')), CALL_TIMEOUT_MS))\n      ]);\n      return result;\n    } catch(e) {\n      const msg = String(e.message || '');\n      if (msg === 'call_timeout') throw new Error('call_timeout');\n      if (msg.includes('429') && attempt < MAX_RETRIES - 1) {\n        await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 2000));\n        continue;\n      }\n      throw e;\n    }\n  }\n};\n\nfunction computeScores(s) {\n  const overall = Math.round((\n    (s.relevance_score||0)*0.35 + (s.budget_score||0)*0.30 +\n    (s.urgency_score||0)*0.15 + (s.win_probability||0)*0.20\n  ) * 100) / 100;\n  let alert_tier = 'discard';\n  if (overall >= 0.85) alert_tier = 'instant';\n  else if (overall >= 0.70) alert_tier = 'digest';\n  else if (overall >= 0.30) alert_tier = 'dashboard';\n  return { ...s, overall_score: overall, alert_tier };\n}\n\nfunction fallback(reason) {\n  return computeScores({\n    relevance_score:0.1, budget_score:0.1, urgency_score:0.1, win_probability:0.1,\n    client_context: 'Could not extract client context',\n    project_context: 'Could not extract project context',\n    summary:'Parse error: '+reason, industry:'Unknown', tags:[], reasoning:reason,\n    estimated_budget_text:null, deadline_text:null, location:null, tech_stack:[],\n    company_name:null, contact_info:null, lead_founder_name:null, lead_website:null, reddit_author:null\n  });\n}\n\nfunction buildItem(post, s) {\n  return { json: {\n    title: post.title,\n    description: post.description,\n    source: post.source,\n    source_url: post.source_url,\n    source_id: post.source_id,\n    posted_at: post.posted_at,\n    author: post.author,\n    subreddit: post.subreddit,\n    upvotes: post.upvotes,\n    num_comments: post.num_comments,\n    relevance_score: s.relevance_score,\n    budget_score: s.budget_score,\n    urgency_score: s.urgency_score,\n    win_probability: s.win_probability,\n    overall_score: s.overall_score,\n    ai_summary: s.summary,\n    client_context: s.client_context,\n    project_context: s.project_context,\n    industry: s.industry,\n    ai_tags: s.tags || [],\n    ai_reasoning: s.reasoning,\n    estimated_budget_text: s.estimated_budget_text,\n    deadline_text: s.deadline_text,\n    location: s.location,\n    tech_stack: s.tech_stack || [],\n    company_name: s.company_name,\n    contact_info: s.contact_info,\n    lead_founder: s.lead_founder_name || post.lead_founder || null,\n    lead_company: s.company_name || post.lead_company || null,\n    lead_website: s.lead_website || post.lead_website || null,\n    lead_contact: s.contact_info || null,\n    lead_score: Math.round(s.overall_score * 10),\n    alert_tier: s.alert_tier,\n    discovered_at: new Date().toISOString(),\n    status: 'new',\n    outreach_draft: ''\n  }};\n}\n\nconst results = [];\nfor (let i = 0; i < posts.length; i += BATCH_SIZE) {\n  const batch = posts.slice(i, i + BATCH_SIZE);\n  const postsBlock = batch.map((p, idx) =>\n    'POST ' + (idx+1) + ':\\nTitle: ' + p.title +\n    '\\nSource: ' + (p.source||'') +\n    '\\nAuthor: ' + (p.author||'unknown') +\n    '\\nDescription: ' + (p.description||'').substring(0, 600)\n  ).join('\\n\\n---\\n\\n');\n\n  const schema = '{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"client_context\":\"Detailed description of who the client is\",\"project_context\":\"Detailed description of what they want built\",\"summary\":\"1-2 sentences\",\"industry\":\"FinTech/HealthTech/SaaS/Manufacturing/eCommerce/General\",\"tags\":[],\"reasoning\":\"brief\",\"estimated_budget_text\":null,\"deadline_text\":null,\"location\":null,\"tech_stack\":[],\"company_name\":null,\"contact_info\":null,\"lead_founder_name\":null,\"lead_website\":null,\"reddit_author\":null}';\n  const prompt = SYSTEM_PROMPT + '\\n\\nScore ALL ' + batch.length + ' posts. Return ONLY a valid JSON array with exactly ' + batch.length + ' objects. Each object must have: ' + schema + '\\n\\n' + postsBlock;\n\n  let batchScores = null;\n  let debugSnippet = '';\n  try {\n    const respRaw = await callGeminiWithRetry(prompt);\n    const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n    const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n    debugSnippet = raw.substring(0, 300);\n    const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n    const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n    if (match) {\n      const parsed = JSON.parse(match[0]);\n      if (Array.isArray(parsed) && parsed.length > 0) batchScores = parsed;\n    }\n  } catch(e) { debugSnippet = 'EXCEPTION: ' + e.message; }\n\n  for (let j = 0; j < batch.length; j++) {\n    const s = batchScores && batchScores[j] ? computeScores(batchScores[j]) : fallback(debugSnippet || 'no response');\n    results.push(buildItem(batch[j], s));\n  }\n\n  if (i + BATCH_SIZE < posts.length) await new Promise(r => setTimeout(r, BETWEEN_BATCH_DELAY_MS));\n}\n\nreturn results;"
+      },
+      "id": "gemini-batch-score",
+      "name": "Gemini - Batch Score & Parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-score",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-lead-info",
+      "name": "Check - Has Lead Info",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        160,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-real-company",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.lead_website || $json.lead_company || $json.company_name || '' }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-company-signal",
+      "name": "Check - Has Company Signal",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.hunter.io/v2/domain-search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "={{ $json.lead_website ? 'domain' : 'company' }}",
+              "value": "={{ $json.lead_website ? ($json.lead_website).replace(/^https?:\\/\\/(www\\.)?/, '').split('/')[0] : ($json.lead_company || $json.company_name || '') }}"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.HUNTER_API_KEY }}"
+            },
+            {
+              "name": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "hunter-enrich",
+      "name": "Hunter - Enrich Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        -160
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const hunterResp = $input.item.json;\nconst original = $('Check - Has Lead Info').item.json;\nconst data = hunterResp?.data || {};\nconst emails = data.emails || [];\nconst priority = ['ceo','founder','co-founder','cto','owner','president','vp','director'];\nlet person = emails.find(e => priority.some(t => (e.position||'').toLowerCase().includes(t))) || emails[0] || null;\nreturn [{ json: {\n  ...original,\n  hunter_name: person ? `${person.first_name||''} ${person.last_name||''}`.trim() : '',\n  hunter_email: person?.value || '',\n  hunter_title: person?.position || '',\n  hunter_company: data.organization || original.lead_company || ''\n}}];"
+      },
+      "id": "parse-hunter",
+      "name": "Parse Hunter Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  ...$input.item.json,\n  hunter_name: '',\n  hunter_email: '',\n  hunter_title: '',\n  hunter_company: ''\n}}];"
+      },
+      "id": "set-empty-hunter-fields",
+      "name": "Set Empty Hunter Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({\n  json: {\n    ...item.json,\n    enrichment_source: 'hunter-miss'\n  }\n}));"
+      },
+      "id": "flag-hunter-miss",
+      "name": "Flag - Hunter Miss",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-email-exists",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.hunter_email }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-hunter-has-email",
+      "name": "Check - Hunter Has Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const seen = new Map();\nfor (const item of $input.all()) {\n  const id = item.json.source_id;\n  if (!id) continue;\n  if (!seen.has(id)) {\n    seen.set(id, item.json);\n  } else {\n    if (item.json.hunter_email && !seen.get(id).hunter_email) {\n      seen.set(id, item.json);\n    }\n  }\n}\nreturn [...seen.values()]\n  .sort((a, b) => (b.overall_score||0) - (a.overall_score||0))\n  .map(json => ({ json }));"
+      },
+      "id": "dedup-by-source-id",
+      "name": "Dedup by Source ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "score-check",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0.8
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-score",
+      "name": "Filter - Score >= 0.80",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1840,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Opportunities"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Source ID": "={{ $json.source_id }}",
+            "Title": "={{ $json.title }}",
+            "Subreddit": "={{ $json.subreddit }}",
+            "Source URL": "={{ $json.source_url }}",
+            "Posted At": "={{ $json.posted_at }}",
+            "Discovered At": "={{ $json.discovered_at }}",
+            "Author": "={{ $json.author }}",
+            "Overall Score": "={{ $json.overall_score }}",
+            "Relevance Score": "={{ $json.relevance_score }}",
+            "Budget Score": "={{ $json.budget_score }}",
+            "Urgency Score": "={{ $json.urgency_score }}",
+            "Win Probability": "={{ $json.win_probability }}",
+            "Alert Tier": "={{ $json.alert_tier }}",
+            "Industry": "={{ $json.industry }}",
+            "AI Summary": "={{ $json.ai_summary }}",
+            "Client Context": "={{ $json.client_context }}",
+            "Project Context": "={{ $json.project_context }}",
+            "AI Tags": "={{ ($json.ai_tags || []).join(', ') }}",
+            "Tech Stack": "={{ ($json.tech_stack || []).join(', ') }}",
+            "Budget Mentioned": "={{ $json.estimated_budget_text }}",
+            "Location": "={{ $json.location }}",
+            "Upvotes": "={{ $json.upvotes }}",
+            "Comments": "={{ $json.num_comments }}",
+            "Status": "new",
+            "AI Reasoning": "={{ $json.ai_reasoning }}",
+            "Lead Founder": "={{ $json.lead_founder || '' }}",
+            "Lead Company": "={{ $json.lead_company || '' }}",
+            "Lead Website": "={{ $json.lead_website || '' }}",
+            "Lead Contact": "={{ $json.lead_contact || '' }}",
+            "Lead Score": "={{ $json.lead_score || '' }}",
+            "Hunter Name": "={{ $json.hunter_name || '' }}",
+            "Hunter Email": "={{ $json.hunter_email || '' }}",
+            "Hunter Title": "={{ $json.hunter_title || '' }}",
+            "Hunter Company": "={{ $json.hunter_company || '' }}"
+          },
+          "matchingColumns": [
+            "Source ID"
+          ],
+          "schema": [
+            {
+              "id": "Source ID",
+              "displayName": "Source ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Subreddit",
+              "displayName": "Subreddit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source URL",
+              "displayName": "Source URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Posted At",
+              "displayName": "Posted At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Discovered At",
+              "displayName": "Discovered At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Author",
+              "displayName": "Author",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Overall Score",
+              "displayName": "Overall Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Relevance Score",
+              "displayName": "Relevance Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Budget Score",
+              "displayName": "Budget Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Urgency Score",
+              "displayName": "Urgency Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Win Probability",
+              "displayName": "Win Probability",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Alert Tier",
+              "displayName": "Alert Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Industry",
+              "displayName": "Industry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Tags",
+              "displayName": "AI Tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tech Stack",
+              "displayName": "Tech Stack",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Budget Mentioned",
+              "displayName": "Budget Mentioned",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Upvotes",
+              "displayName": "Upvotes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Comments",
+              "displayName": "Comments",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Reasoning",
+              "displayName": "AI Reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Outreach Draft",
+              "displayName": "Outreach Draft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Lead Founder",
+              "displayName": "Lead Founder",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Lead Company",
+              "displayName": "Lead Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Lead Website",
+              "displayName": "Lead Website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Lead Contact",
+              "displayName": "Lead Contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Lead Score",
+              "displayName": "Lead Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hunter Name",
+              "displayName": "Hunter Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hunter Email",
+              "displayName": "Hunter Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hunter Title",
+              "displayName": "Hunter Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hunter Company",
+              "displayName": "Hunter Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "append-to-sheet",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        2080,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HopOeXjaGgSku8RO",
+          "name": "Google Sheets account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Build Scrape Config').first().json;\nconst queries = [];\n\n// Freelancer queries (SerpAPI)\nconst flSources = config.freelancerSources || [];\nfor (const s of flSources) {\n  queries.push({ json: { q: s.query, platform: 'freelancer' } });\n}\n\n// Guru queries (SerpAPI)\nconst guruSources = config.guruSources || [];\nfor (const s of guruSources) {\n  queries.push({ json: { q: s.query, platform: 'guru' } });\n}\n\nreturn queries;"
+      },
+      "id": "build-marketplace-queries",
+      "name": "Build Marketplace Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "num",
+              "value": "20"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.SERPAPI_KEY }}"
+            },
+            {
+              "name": "engine",
+              "value": "google"
+            },
+            {
+              "name": "gl",
+              "value": "us"
+            },
+            {
+              "name": "hl",
+              "value": "en"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "serpapi-marketplace",
+      "name": "SerpAPI - Marketplace Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        -200
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Build Scrape Config').first().json;\nconst keywordsSkip = config.keywordsSkip || [];\nconst results = [];\nconst seenInRun = new Set();\n\nfor (const item of $input.all()) {\n  const data = item.json;\n  if (!data || data.error) continue;\n\n  const organicResults = data.organic_results || [];\n  const searchQ = data.search_parameters?.q || '';\n\n  // Determine platform from query\n  let platform = 'unknown';\n  if (searchQ.includes('freelancer.com')) platform = 'freelancer';\n  else if (searchQ.includes('guru.com')) platform = 'guru';\n  else if (searchQ.includes('peopleperhour.com')) platform = 'peopleperhour';\n\n  for (const r of organicResults) {\n    if (!r.link) continue;\n\n    // Filter by correct URL patterns\n    if (platform === 'freelancer' && !r.link.includes('freelancer.com/projects/')) continue;\n    if (platform === 'guru' && !r.link.includes('guru.com/jobs/')) continue;\n    if (platform === 'unknown') continue;\n\n    const id = platform + '_' + Buffer.from(r.link).toString('base64').substring(0, 24);\n    if (seenInRun.has(id)) continue;\n    seenInRun.add(id);\n\n    const title   = String(r.title   || '').substring(0, 500);\n    const snippet = String(r.snippet || '').replace(/<[^>]*>/g, '').substring(0, 3000);\n    if (!title) continue;\n\n    const fullText = (title + ' ' + snippet).toLowerCase();\n    if (keywordsSkip.some(kw => fullText.includes(kw.toLowerCase()))) continue;\n\n    // Skip clearly low-budget results (small gigs, INR rates, hourly under $50)\n    // Only block if the TITLE itself has low budget - snippets have noise\n    const titleLower = title.toLowerCase();\n    const lowBudgetSignals = ['₹', 'rs.', 'inr', '$750-1500 usd', '$250-750 usd', '$150-300 usd', '$30-250 usd', '$8-15/hr', '$10-20/hr'];\n    if (lowBudgetSignals.some(s => titleLower.includes(s) || snippet.toLowerCase().includes(s))) continue;\n\n    results.push({ json: {\n      title,\n      description: snippet,\n      source: platform,\n      source_url: r.link,\n      source_id: id,\n      posted_at: (() => { try { const d = r.date ? new Date(r.date) : null; return (d && !isNaN(d)) ? d.toISOString() : new Date().toISOString(); } catch(e) { return new Date().toISOString(); } })(),\n      author: '',\n      subreddit: '',\n      upvotes: 0,\n      num_comments: 0,\n      flair_text: '',\n      budget_text: '',\n      platform\n    }});\n  }\n}\n\nif (results.length === 0) return [{ json: { _empty: true, platform: 'marketplace' } }];\nreturn results;"
+      },
+      "id": "normalize-marketplace",
+      "name": "Normalize - Marketplace Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "merge-all-sources",
+      "name": "Merge All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -160,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pass-through — extract budget from SerpAPI snippet directly\n// Guru page fetch removed (blocking/timeout). SerpAPI snippet already has budget.\nconst results = [];\n\nfor (const item of $input.all()) {\n  const post = { ...item.json };\n  if (post._empty || post._noData) { results.push({ json: post }); continue; }\n\n  // If description already has budget signal from SerpAPI snippet, boost it\n  const desc = post.description || '';\n  const budgetMatch = desc.match(/(Fixed Price|Hourly)[^|\\n]*\\|[^$\\n]*\\$[\\d,k\\-\\.]+/i)\n    || desc.match(/\\$(\\d[\\d,\\.]+k?)[\\s\\-–]+\\$(\\d[\\d,\\.]+k?)/i)\n    || desc.match(/\\$([\\d,\\.]+)(?:k|K|,000)/);\n\n  if (budgetMatch && !post.budget_text) {\n    post.budget_text = budgetMatch[0].trim();\n  }\n\n  results.push({ json: post });\n}\n\nreturn results;"
+      },
+      "id": "fetch-page-content",
+      "name": "Fetch Page Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        0
+      ],
+      "continueOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron - Every 30 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Business Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Business Profile": {
+      "main": [
+        [
+          {
+            "node": "Parse Business Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Business Profile": {
+      "main": [
+        [
+          {
+            "node": "Build Scrape Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Scrape Config": {
+      "main": [
+        [
+          {
+            "node": "Scrape - Contra/Toptal/Fiverr/Codeable",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Marketplace Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape - Contra/Toptal/Fiverr/Codeable": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize to RawOpportunity": {
+      "main": [
+        [
+          {
+            "node": "Fetch Page Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Batch Score & Parse": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Lead Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Lead Info": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Company Signal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Empty Hunter Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Company Signal": {
+      "main": [
+        [
+          {
+            "node": "Hunter - Enrich Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag - Hunter Miss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hunter - Enrich Lead": {
+      "main": [
+        [
+          {
+            "node": "Parse Hunter Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Hunter Response": {
+      "main": [
+        [
+          {
+            "node": "Check - Hunter Has Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Hunter Has Email": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag - Hunter Miss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag - Hunter Miss": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Empty Hunter Fields": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup by Source ID": {
+      "main": [
+        [
+          {
+            "node": "Filter - Score >= 0.30",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Marketplace Queries": {
+      "main": [
+        [
+          {
+            "node": "SerpAPI - Marketplace Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI - Marketplace Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize - Marketplace Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize - Marketplace Results": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge All Sources": {
+      "main": [
+        [
+          {
+            "node": "Normalize to RawOpportunity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Page Content": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Batch Score & Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter - Score >= 0.30": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "freelance-marketplaces-v2",
+  "meta": {
+    "instanceId": "bfa881661c018749d441660d36f63fdf552d02437db15de1ed54bb7a572d9e36"
+  },
+  "id": "dealhunter-freelance-v2",
+  "tags": []
+}

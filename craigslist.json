@@ -1,0 +1,808 @@
+{
+  "name": "DealHunter - Craigslist Computer Gigs (Cat 14)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "id": "cron-craigslist",
+      "name": "Cron - Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1400,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-craigslist",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1400,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://newyork.craigslist.org/search/cpg?format=rss"
+      },
+      "id": "rss-nyc",
+      "name": "RSS - NYC Computer Gigs",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -1100,
+        -600
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://sfbay.craigslist.org/search/cpg?format=rss"
+      },
+      "id": "rss-sf",
+      "name": "RSS - SF Bay Computer Gigs",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -1100,
+        -300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://losangeles.craigslist.org/search/cpg?format=rss"
+      },
+      "id": "rss-la",
+      "name": "RSS - LA Computer Gigs",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -1100,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://chicago.craigslist.org/search/cpg?format=rss"
+      },
+      "id": "rss-chicago",
+      "name": "RSS - Chicago Computer Gigs",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -1100,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://austin.craigslist.org/search/cpg?format=rss"
+      },
+      "id": "rss-austin",
+      "name": "RSS - Austin Computer Gigs",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -1100,
+        600
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "merge-nyc-sf",
+      "name": "Merge - NYC + SF",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -820,
+        -450
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "merge-plus-la",
+      "name": "Merge - + LA",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -580,
+        -225
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "merge-plus-chicago",
+      "name": "Merge - + Chicago",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -340,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "merge-plus-austin",
+      "name": "Merge - + Austin",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -100,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\nconst seenInRun = new Set();\n\n// Seller/for-hire signals — skip these posts\nconst sellerSignals = [\n  'i will ', 'i am a ', 'i offer', 'i provide', 'my services',\n  'for hire', 'available for hire', 'freelancer available',\n  'portfolio:', 'years of experience', 'i specialize in',\n  'my rates', 'i can help you', 'hire me', 'i am available',\n  'my approach', 'check out my', 'visit my', 'contact me for',\n  'competitive rates', 'reach out to me', 'i have been working',\n  'i am offering', 'seeking clients', 'seeking employment',\n  'looking for work', 'seeking work', 'looking for clients',\n  'experienced developer', 'senior developer available',\n  'i will design', 'i will build', 'i will develop'\n];\n\n// Buyer/project signals — at least one must be present\nconst buyerSignals = [\n  'looking for', 'need', 'seeking', 'wanted', 'want to hire',\n  'build', 'develop', 'create', 'project', 'contract work',\n  'budget', 'hire', 'hiring', 'require', 'must have',\n  'will pay', 'compensation', 'work needed', 'job', 'task',\n  'help with', 'assist', 'build me', 'we need', 'our company',\n  'our startup', 'our business', 'small business'\n];\n\nfor (const item of $input.all()) {\n  const data = item.json;\n\n  const title = String(data.title || '').trim().substring(0, 500);\n  const link  = String(data.link || data.guid || '').trim();\n  const rawContent = data.content || data.contentSnippet || data.description || '';\n  const description = String(rawContent).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim().substring(0, 3000);\n  const pubDate = data.isoDate || data.pubDate || '';\n  const guid    = String(data.guid || link);\n\n  if (!title || !link) continue;\n\n  const id = 'craigslist_' + guid.replace(/[^a-z0-9]/gi, '').slice(-60);\n  if (seenInRun.has(id)) continue;\n  seenInRun.add(id);\n\n  const fullText = (title + ' ' + description).toLowerCase();\n\n  // Skip seller posts\n  if (sellerSignals.some(kw => fullText.includes(kw))) continue;\n\n  // Must have at least one buyer signal\n  if (!buyerSignals.some(kw => fullText.includes(kw))) continue;\n\n  // Detect city from URL domain\n  let city = 'USA';\n  if (link.includes('newyork.craigslist'))      city = 'New York, NY';\n  else if (link.includes('sfbay.craigslist'))    city = 'San Francisco, CA';\n  else if (link.includes('losangeles.craigslist')) city = 'Los Angeles, CA';\n  else if (link.includes('chicago.craigslist'))  city = 'Chicago, IL';\n  else if (link.includes('austin.craigslist'))   city = 'Austin, TX';\n\n  // Extract any budget mention\n  let budget_text = '';\n  const budgetMatch = (title + ' ' + description).match(/\\$[\\d,]+(?:k)?(?:\\s*[-–]\\s*\\$?[\\d,]+(?:k)?)?/i);\n  if (budgetMatch) budget_text = budgetMatch[0].trim().substring(0, 80);\n\n  let posted_at = new Date().toISOString();\n  try { if (pubDate) posted_at = new Date(pubDate).toISOString(); } catch(e) {}\n\n  results.push({ json: {\n    title,\n    description,\n    source: 'craigslist',\n    source_url: link,\n    source_id: id,\n    posted_at,\n    author: '',\n    subreddit: 'craigslist_computer_gigs',\n    upvotes: 0,\n    num_comments: 0,\n    flair_text: 'Computer Gigs',\n    budget_text,\n    platform: 'craigslist',\n    location: city\n  }});\n}\n\nif (results.length === 0) return [{ json: { _empty: true, platform: 'craigslist' } }];\n// Cap at 30 leads per run\nreturn results.slice(0, 30);"
+      },
+      "id": "normalize-craigslist",
+      "name": "Normalize - Craigslist Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const post = $input.item.json;\nif (post._empty) return { json: post };\n\nconst apiKey = $env.GOOGLE_AI_API_KEY;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, custom software, full-stack web/mobile apps, data pipelines, API integrations.\n\nThese leads are from Craigslist Computer Gigs sections in major US metros (NYC, SF Bay Area, LA, Chicago, Austin). These are REAL project postings from local businesses, startups, and entrepreneurs actively seeking technical help. Craigslist Computer Gigs represent NEAR-ZERO COMPETITION opportunities because agencies ignore Craigslist — making even $5K-$20K projects highly valuable to pursue.\n\nIDEAL LEAD: A business or individual posting a genuine project request for custom software, AI/ML, automation, web/mobile app, data analysis, API work, or any technical project.\n\nHARD EXCLUSIONS — Score overall_score 0.0 immediately, do not process:\n- Lead is from India or an Indian company (location: India, .in domain, Indian city/company name context) → 0.0\n- Lead is requesting to build a SaaS subscription product (we do NOT build SaaS products) → 0.0  \n- Budget is clearly under $10,000 OR budget_score would be below 0.3 → 0.0\n- Individual freelancer or [For Hire] ad → 0.0\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 1.0=explicit AI/ML/automation/computer vision project | 0.8=custom software or enterprise app | 0.6=web/mobile app, SaaS, or API project | 0.4=general tech work (data entry tools, basic websites) | 0.2=completely unrelated\n2. budget_score: 1.0=$50K+ | 0.8=$25-50K | 0.6=$10-25K | 0.5=unknown but clearly a real project | 0.4=$5-10K | 0.2=<$5K or very vague/unclear\n3. urgency_score: 1.0=ASAP/urgent/immediately | 0.8=deadline within 2 weeks | 0.6=within a month | 0.4=flexible timing mentioned | 0.2=no urgency signals\n4. win_probability: 0.9+=local business posting with perfect AI/ML or automation fit | 0.8=clear project with stated budget, great fit | 0.7=good fit with some scope ambiguity | 0.5=competitive or vague scope | 0.3=very small budget or unclear intent | 0.1=no fit\n\nBUDGET ESTIMATION (ALWAYS fill estimated_budget_text, never null):\n- AI/ML project → \"$10K-$50K (AI/ML Craigslist scope)\"\n- Automation/workflow → \"$5K-$30K (automation scope)\"\n- Full-stack web/mobile app → \"$5K-$25K (Craigslist app scope)\"\n- SaaS or complex platform → \"$15K-$75K (platform scope)\"\n- Data/analytics work → \"$3K-$20K (data project scope)\"\n- Unknown → \"$5K-$25K (estimated Craigslist project)\"\n\nCOMPANY EXTRACTION: Extract company name, contact name, website from title/snippet/URL. Never invent. Return null if not found.`;\n\nconst prompt = SYSTEM_PROMPT + `\\n\\nScore this Craigslist Computer Gigs lead. Return ONLY a single valid JSON object:\\n{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"client_context\":\"Detailed description of who the client is (company, industry, current situation)\",\"project_context\":\"Detailed description of what they want built (specific technical requirements, goals)\",\"summary\":\"3-5 sentence summary: what the poster needs, the project scope, any budget or deadline signals, and why ScaleBuild AI is the right fit. Note the city.\",\"industry\":\"FinTech/HealthTech/SaaS/eCommerce/Local Business/Startup/Manufacturing/Logistics/General\",\"tags\":[\"tag1\",\"tag2\"],\"reasoning\":\"Full detailed AI reasoning: explain each score dimension — why this relevance, why this budget estimate, why this urgency, why this win probability. Mention the near-zero competition advantage and recommended outreach approach.\",\"estimated_budget_text\":\"$X-$Y (reason)\",\"deadline_text\":null,\"tech_stack\":[],\"company_name\":null,\"lead_founder_name\":null,\"lead_website\":null}\\n\\nTitle: ${post.title}\\nCity: ${post.location||'USA'}\\nDescription: ${(post.description||'').substring(0, 1200)}${post.budget_text ? '\\nBudget Mentioned: ' + post.budget_text : ''}`;\n\nconst body = {\n  contents: [{ parts: [{ text: prompt }] }],\n  generationConfig: { maxOutputTokens: 100000, temperature: 0.2, responseMimeType: 'application/json' }\n};\n\nlet s = null;\ntry {\n  const respRaw = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n    body\n  });\n  const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n  const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (match) s = JSON.parse(match[0]);\n} catch(e) {}\n\nif (!s) s = {\n  relevance_score: 0.4, budget_score: 0.4, urgency_score: 0.3, win_probability: 0.5,\n  client_context: 'Could not extract client context',\n  project_context: 'Could not extract project context',\n  summary: 'Parse error — using defaults', industry: 'General', tags: [], reasoning: 'Could not parse Gemini response',\n  estimated_budget_text: '$5K-$25K (estimated Craigslist project)',\n  deadline_text: null, tech_stack: [], company_name: null, lead_founder_name: null, lead_website: null\n};\n\nconst overall = Math.round(((s.relevance_score*0.35)+(s.budget_score*0.30)+(s.urgency_score*0.15)+(s.win_probability*0.20))*100)/100;\nconst alert_tier = overall>=0.85?'instant':overall>=0.70?'digest':overall>=0.30?'dashboard':'discard';\n\nreturn { json: {\n  source_id: post.source_id, title: post.title, description: post.description,\n  source: post.source, source_url: post.source_url, posted_at: post.posted_at,\n  author: post.author||'', subreddit: post.subreddit||'craigslist_computer_gigs',\n  upvotes: 0, num_comments: 0, flair_text: 'Computer Gigs',\n  relevance_score: s.relevance_score, budget_score: s.budget_score,\n  urgency_score: s.urgency_score, win_probability: s.win_probability,\n  overall_score: overall, \n  ai_summary: s.summary, \n  client_context: s.client_context,\n  project_context: s.project_context,\n  industry: s.industry,\n  ai_tags: s.tags||[], ai_reasoning: s.reasoning,\n  estimated_budget_text: s.estimated_budget_text||'',\n  budget_mentioned: post.budget_text || s.estimated_budget_text || '',\n  tech_stack: s.tech_stack||[], company_name: s.company_name||null,\n  lead_founder: s.lead_founder_name||null, lead_company: s.company_name||null,\n  lead_website: s.lead_website||null, lead_contact: null,\n  lead_score: Math.round(overall*10),\n  alert_tier, discovered_at: new Date().toISOString(), status: 'new',\n  location: post.location||null, deadline_text: s.deadline_text||null,\n  outreach_draft: '',\n  hunter_name:'', hunter_email:'', hunter_title:'', hunter_company:'',\n  hunter_all_emails:'', hunter_all_names:'', hunter_all_titles:''\n}};"
+      },
+      "id": "gemini-craigslist",
+      "name": "Gemini - Score & Parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-not-empty",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.title }}",
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-lead-info",
+      "name": "Check - Has Lead Info",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-company",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ ($json.lead_company||'') + ($json.lead_website||'') }}",
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-company-signal",
+      "name": "Check - Has Company Signal",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        940,
+        -50
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.hunter.io/v2/domain-search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "={{ $json.lead_website ? 'domain' : 'company' }}",
+              "value": "={{ $json.lead_website ? ($json.lead_website).replace(/^https?:\\/\\/(www\\.)?/, '').split('/')[0] : ($json.lead_company||'') }}"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.HUNTER_API_KEY }}"
+            },
+            {
+              "name": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "hunter-craigslist",
+      "name": "Hunter - Enrich Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        -250
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const hunterResp = $input.item.json;\nconst original = $('Check - Has Lead Info').item.json;\nconst data = hunterResp?.data || {};\nconst emails = data.emails || [];\nconst org = data.organization || original.lead_company || '';\n\nif (emails.length === 0) {\n  return [{ json: { ...original, hunter_name: '', hunter_email: '', hunter_title: '', hunter_company: org, hunter_all_emails: '', hunter_all_names: '', hunter_all_titles: '' } }];\n}\n\nconst priority = ['ceo','founder','co-founder','cto','owner','president','vp','director'];\nconst best = emails.find(e => priority.some(t => (e.position||'').toLowerCase().includes(t))) || emails[0];\n\nconst allEmails  = emails.map(e => e.value || '').filter(Boolean).join(', ');\nconst allNames   = emails.map(e => (e.first_name||e.last_name) ? `${e.first_name||''} ${e.last_name||''}`.trim() : '').filter(Boolean).join(', ');\nconst allTitles  = emails.map(e => e.position || '').filter(Boolean).join(', ');\n\nreturn [{ json: {\n  ...original,\n  hunter_name:       best.first_name || best.last_name ? `${best.first_name||''} ${best.last_name||''}`.trim() : '',\n  hunter_email:      best.value || '',\n  hunter_title:      best.position || '',\n  hunter_company:    org,\n  hunter_all_emails: allEmails,\n  hunter_all_names:  allNames,\n  hunter_all_titles: allTitles\n}}];"
+      },
+      "id": "parse-hunter-craigslist",
+      "name": "Parse Hunter Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        -250
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-hunter-email",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.hunter_email }}",
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-hunter-email",
+      "name": "Check - Hunter Has Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1720,
+        -250
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return [{ json: { ...$input.item.json, hunter_miss: true } }];"
+      },
+      "id": "flag-hunter-miss",
+      "name": "Flag - Hunter Miss",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return [{ json: { ...$input.item.json, hunter_name:'', hunter_email:'', hunter_title:'', hunter_company:'', hunter_all_emails:'', hunter_all_names:'', hunter_all_titles:'' } }];"
+      },
+      "id": "set-empty-hunter",
+      "name": "Set Empty Hunter Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        350
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const seen = new Map();\nfor (const item of $input.all()) {\n  const id = item.json.source_id;\n  if (!id) continue;\n  if (!seen.has(id)) {\n    seen.set(id, item.json);\n  } else {\n    if (item.json.hunter_email && !seen.get(id).hunter_email) {\n      seen.set(id, item.json);\n    }\n  }\n}\nreturn [...seen.values()]\n  .sort((a, b) => (b.overall_score||0) - (a.overall_score||0))\n  .map(json => ({ json }));"
+      },
+      "id": "dedup-craigslist",
+      "name": "Dedup by Source ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "score-check",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0.8
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-score",
+      "name": "Filter - Score >= 0.80",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Opportunities"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Source ID": "={{ $json.source_id }}",
+            "Title": "={{ $json.title }}",
+            "Subreddit": "={{ $json.subreddit }}",
+            "Source URL": "={{ $json.source_url }}",
+            "Posted At": "={{ $json.posted_at }}",
+            "Discovered At": "={{ $json.discovered_at }}",
+            "Author": "={{ $json.author }}",
+            "Overall Score": "={{ $json.overall_score }}",
+            "Relevance Score": "={{ $json.relevance_score }}",
+            "Budget Score": "={{ $json.budget_score }}",
+            "Urgency Score": "={{ $json.urgency_score }}",
+            "Win Probability": "={{ $json.win_probability }}",
+            "Alert Tier": "={{ $json.alert_tier }}",
+            "Industry": "={{ $json.industry }}",
+            "AI Summary": "={{ $json.ai_summary }}",
+            "Client Context": "={{ $json.client_context }}",
+            "Project Context": "={{ $json.project_context }}",
+            "AI Tags": "={{ ($json.ai_tags||[]).join(', ') }}",
+            "Tech Stack": "={{ ($json.tech_stack||[]).join(', ') }}",
+            "Budget Mentioned": "={{ $json.budget_mentioned }}",
+            "Location": "={{ $json.location }}",
+            "Upvotes": "={{ $json.upvotes }}",
+            "Comments": "={{ $json.num_comments }}",
+            "Status": "new",
+            "AI Reasoning": "={{ $json.ai_reasoning }}",
+            "Lead Founder": "={{ $json.lead_founder||'' }}",
+            "Lead Company": "={{ $json.lead_company||'' }}",
+            "Lead Website": "={{ $json.lead_website||'' }}",
+            "Lead Contact": "={{ $json.lead_contact||'' }}",
+            "Lead Score": "={{ $json.lead_score||'' }}",
+            "Hunter Name": "={{ $json.hunter_name||'' }}",
+            "Hunter Email": "={{ $json.hunter_email||'' }}",
+            "Hunter Title": "={{ $json.hunter_title||'' }}",
+            "Hunter Company": "={{ $json.hunter_company||'' }}",
+            "Hunter All Emails": "={{ $json.hunter_all_emails||'' }}",
+            "Hunter All Names": "={{ $json.hunter_all_names||'' }}",
+            "Hunter All Titles": "={{ $json.hunter_all_titles||'' }}"
+          },
+          "matchingColumns": [
+            "Source ID"
+          ],
+          "schema": [
+            {
+              "id": "Source ID",
+              "displayName": "Source ID",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheet-craigslist",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        2500,
+        100
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HopOeXjaGgSku8RO",
+          "name": "Google Sheets account"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Cron - Every 4 Hours": {
+      "main": [
+        [
+          {
+            "node": "RSS - NYC Computer Gigs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS - SF Bay Computer Gigs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS - LA Computer Gigs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS - Chicago Computer Gigs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS - Austin Computer Gigs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "RSS - NYC Computer Gigs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS - SF Bay Computer Gigs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS - LA Computer Gigs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS - Chicago Computer Gigs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS - Austin Computer Gigs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS - NYC Computer Gigs": {
+      "main": [
+        [
+          {
+            "node": "Merge - NYC + SF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS - SF Bay Computer Gigs": {
+      "main": [
+        [
+          {
+            "node": "Merge - NYC + SF",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - NYC + SF": {
+      "main": [
+        [
+          {
+            "node": "Merge - + LA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS - LA Computer Gigs": {
+      "main": [
+        [
+          {
+            "node": "Merge - + LA",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - + LA": {
+      "main": [
+        [
+          {
+            "node": "Merge - + Chicago",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS - Chicago Computer Gigs": {
+      "main": [
+        [
+          {
+            "node": "Merge - + Chicago",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - + Chicago": {
+      "main": [
+        [
+          {
+            "node": "Merge - + Austin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS - Austin Computer Gigs": {
+      "main": [
+        [
+          {
+            "node": "Merge - + Austin",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - + Austin": {
+      "main": [
+        [
+          {
+            "node": "Normalize - Craigslist Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize - Craigslist Results": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Score & Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Score & Parse": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Lead Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Lead Info": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Company Signal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Empty Hunter Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Company Signal": {
+      "main": [
+        [
+          {
+            "node": "Hunter - Enrich Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag - Hunter Miss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hunter - Enrich Lead": {
+      "main": [
+        [
+          {
+            "node": "Parse Hunter Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Hunter Response": {
+      "main": [
+        [
+          {
+            "node": "Check - Hunter Has Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Hunter Has Email": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag - Hunter Miss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag - Hunter Miss": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Empty Hunter Fields": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup by Source ID": {
+      "main": [
+        [
+          {
+            "node": "Filter - Score >= 0.30",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter - Score >= 0.30": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "craigslist-cat14-v1",
+  "id": "craigslist-cat14"
+}

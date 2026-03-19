@@ -57,6 +57,7 @@ services:
     container_name: n8n-main
     restart: always
     dns:
+      - 192.168.1.254
       - 8.8.8.8
       - 8.8.4.4
     environment:
@@ -112,7 +113,11 @@ services:
       - APOLLO_API_KEY=${APOLLO_API_KEY}
       - HUNTER_API_KEY=${HUNTER_API_KEY}
       - SERPAPI_KEY=${SERPAPI_KEY}
-      - N8N_RUNNERS_TASK_TIMEOUT=600
+      - FREELANCER_OAUTH_TOKEN=${FREELANCER_OAUTH_TOKEN}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+      - WHATSAPP_TO_NUMBER=${WHATSAPP_TO_NUMBER}
+      - N8N_RUNNERS_TASK_TIMEOUT=1800
     ports:
       - "127.0.0.1:5678:5678"
     links:
@@ -133,6 +138,7 @@ services:
     restart: always
     command: worker
     dns:
+      - 192.168.1.254
       - 8.8.8.8
       - 8.8.4.4
     environment:
@@ -184,6 +190,11 @@ services:
       - APOLLO_API_KEY=${APOLLO_API_KEY}
       - HUNTER_API_KEY=${HUNTER_API_KEY}
       - SERPAPI_KEY=${SERPAPI_KEY}
+      - FREELANCER_OAUTH_TOKEN=${FREELANCER_OAUTH_TOKEN}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+      - WHATSAPP_TO_NUMBER=${WHATSAPP_TO_NUMBER}
+      - N8N_RUNNERS_TASK_TIMEOUT=1800
     links:
       - postgres
       - redis
@@ -197,3 +208,10 @@ services:
         condition: service_healthy
       sharp-worker:
         condition: service_healthy
+
+networks:
+  default:
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

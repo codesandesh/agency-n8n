@@ -1,0 +1,627 @@
+{
+  "name": "DealHunter - Venture Funding & Growth Signals",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "cron-venture",
+      "name": "Cron - Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1040,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-venture",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1040,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const queries = [\n  // === CRUNCHBASE — recently funded companies ===\n  { q: 'site:crunchbase.com/organization \"seed\" \"AI\" OR \"machine learning\" OR \"automation\" OR \"SaaS\" 2025', platform: 'crunchbase', signal: 'funding' },\n  { q: 'site:crunchbase.com/organization \"series a\" \"AI\" OR \"machine learning\" OR \"automation\" OR \"software\" 2025', platform: 'crunchbase', signal: 'funding' },\n  { q: 'site:crunchbase.com/organization \"series b\" \"AI\" OR \"automation\" OR \"enterprise software\" 2024 OR 2025', platform: 'crunchbase', signal: 'funding' },\n\n  // === TECHCRUNCH funding announcements ===\n  { q: 'site:techcrunch.com \"raises\" \"$\" \"million\" \"AI\" OR \"machine learning\" OR \"automation\" OR \"SaaS\" 2025', platform: 'techcrunch', signal: 'funding' },\n  { q: 'site:techcrunch.com \"seed round\" OR \"series a\" OR \"series b\" \"AI startup\" OR \"SaaS startup\" OR \"automation\" 2025', platform: 'techcrunch', signal: 'funding' },\n  { q: 'site:techcrunch.com \"funding\" \"AI\" OR \"machine learning\" \"hiring\" OR \"expand\" OR \"build\" 2025', platform: 'techcrunch', signal: 'funding' },\n\n  // === VENTUREBEAT ===\n  { q: 'site:venturebeat.com \"raises\" OR \"raised\" \"million\" \"AI\" OR \"automation\" OR \"machine learning\" 2025', platform: 'venturebeat', signal: 'funding' },\n  { q: 'site:venturebeat.com \"seed\" OR \"series a\" \"AI startup\" OR \"automation\" OR \"SaaS\" \"funding\" 2024 OR 2025', platform: 'venturebeat', signal: 'funding' },\n\n  // === LINKEDIN — job posting surge (hiring without filling = outsourcing signal) ===\n  { q: 'site:linkedin.com/jobs \"software engineer\" OR \"ML engineer\" OR \"AI engineer\" \"seed funded\" OR \"recently funded\" OR \"series a\"', platform: 'linkedin_jobs', signal: 'hiring_surge' },\n  { q: 'site:linkedin.com/jobs \"backend engineer\" OR \"full stack engineer\" OR \"data engineer\" \"AI startup\" OR \"funded startup\" OR \"early stage\"', platform: 'linkedin_jobs', signal: 'hiring_surge' },\n  { q: 'site:linkedin.com/jobs \"CTO\" OR \"VP engineering\" OR \"head of engineering\" \"AI\" OR \"automation\" \"startup\" OR \"seed\" OR \"series a\"', platform: 'linkedin_jobs', signal: 'hiring_surge' },\n\n  // === LINKEDIN posts — funding announcements ===\n  { q: 'site:linkedin.com/posts \"just raised\" OR \"we raised\" \"building\" OR \"hiring\" \"AI\" OR \"software\" OR \"automation\" 2025', platform: 'linkedin_posts', signal: 'funding' },\n  { q: 'site:linkedin.com/posts \"excited to announce\" \"funding\" OR \"investment\" \"AI\" OR \"machine learning\" OR \"automation\" 2025', platform: 'linkedin_posts', signal: 'funding' },\n\n  // === INDEED — engineering hiring signals ===\n  { q: 'site:indeed.com \"software engineer\" OR \"ML engineer\" OR \"AI engineer\" \"startup\" OR \"series a funded\" OR \"seed stage\"', platform: 'indeed', signal: 'hiring_surge' },\n\n  // === GLASSDOOR ===\n  { q: 'site:glassdoor.com \"software engineer\" OR \"machine learning engineer\" \"startup\" OR \"seed\" OR \"series a\" \"AI\" OR \"automation\"', platform: 'glassdoor', signal: 'hiring_surge' },\n\n  // === GENERAL FUNDING NEWS ===\n  { q: '\"raises\" \"$\" \"million\" \"AI\" OR \"machine learning\" OR \"automation\" \"seed\" OR \"series a\" site:businessinsider.com OR site:forbes.com 2025', platform: 'news', signal: 'funding' },\n  { q: 'site:eu.startups.com OR site:sifted.eu \"raises\" \"million\" \"AI\" OR \"automation\" OR \"software\" 2025', platform: 'news', signal: 'funding' },\n];\nreturn queries.map(q => ({ json: q }));"
+      },
+      "id": "build-queries-venture",
+      "name": "Build Venture Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "num",
+              "value": "10"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.SERPAPI_KEY }}"
+            },
+            {
+              "name": "engine",
+              "value": "google"
+            },
+            {
+              "name": "tbs",
+              "value": "qdr:m"
+            },
+            {
+              "name": "gl",
+              "value": "us"
+            },
+            {
+              "name": "hl",
+              "value": "en"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "serpapi-venture",
+      "name": "SerpAPI - Venture Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -560,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const skipKeywords = [\n  'apply now', 'job description', 'salary range', 'benefits package',\n  'equal opportunity', 'we are an equal', 'submit your resume',\n  'years of experience required', 'bachelor degree required'\n];\n\nconst platformMap = {\n  'crunchbase.com': 'crunchbase',\n  'techcrunch.com': 'techcrunch',\n  'venturebeat.com': 'venturebeat',\n  'linkedin.com/jobs': 'linkedin_jobs',\n  'linkedin.com/posts': 'linkedin_posts',\n  'linkedin.com/in': 'linkedin_posts',\n  'indeed.com': 'indeed',\n  'glassdoor.com': 'glassdoor',\n  'businessinsider.com': 'news',\n  'forbes.com': 'news',\n  'eu.startups.com': 'news',\n  'sifted.eu': 'news'\n};\n\nconst budgetPatterns = [\n  /\\$(\\d+(?:\\.\\d+)?)\\s*(?:million|M)\\b/i,\n  /raised\\s+([\\$\\€][\\d,.]+\\s*(?:million|M|billion|B)?)/i,\n  /([\\$\\€][\\d,.]+\\s*(?:million|M|billion|B)\\s*(?:seed|series [ab]|funding|round)?)/i,\n];\n\nconst results = [];\nconst seenInRun = new Set();\n\nfor (const item of $input.all()) {\n  const data = item.json;\n  if (!data || data.error) continue;\n\n  const searchQ = data.search_parameters?.q || '';\n  const organicResults = data.organic_results || [];\n\n  // Detect signal type from query\n  const signal = searchQ.includes('engineer') || searchQ.includes('hiring') || searchQ.includes('glassdoor') || searchQ.includes('indeed') ? 'hiring_surge' : 'funding';\n\n  for (const r of organicResults) {\n    const link = r.link || '';\n    if (!link) continue;\n\n    // Detect platform from URL\n    let platform = 'unknown';\n    for (const [domain, pname] of Object.entries(platformMap)) {\n      if (link.includes(domain)) { platform = pname; break; }\n    }\n    if (platform === 'unknown') {\n      // Try generic news\n      if (link.includes('techcrunch') || link.includes('venturebeat') || link.includes('forbes') || link.includes('businessinsider') || link.includes('sifted') || link.includes('eu.startups')) {\n        platform = 'news';\n      }\n    }\n    if (platform === 'unknown') continue;\n\n    const id = platform + '_' + link.replace(/[^a-z0-9]/gi, '').slice(-70);\n    if (seenInRun.has(id)) continue;\n    seenInRun.add(id);\n\n    const title   = String(r.title   || '').substring(0, 500);\n    const snippet = String(r.snippet || '').replace(/<[^>]*>/g, '').substring(0, 3000);\n    if (!title) continue;\n\n    const fullText = (title + ' ' + snippet).toLowerCase();\n    if (skipKeywords.some(kw => fullText.includes(kw))) continue;\n\n    // Extract funding amount from snippet/title\n    let budget_text = '';\n    for (const pat of budgetPatterns) {\n      const m = (snippet + ' ' + title).match(pat);\n      if (m) { budget_text = (m[1] || m[0]).trim().substring(0, 80); break; }\n    }\n\n    // Detect funding stage\n    let flair = signal === 'hiring_surge' ? 'Hiring Surge' : 'Funding';\n    const combined = (title + ' ' + snippet).toLowerCase();\n    if (combined.includes('series b')) flair = 'Series B';\n    else if (combined.includes('series a')) flair = 'Series A';\n    else if (combined.includes('seed')) flair = 'Seed';\n    else if (combined.includes('pre-seed') || combined.includes('pre seed')) flair = 'Pre-Seed';\n    else if (signal === 'hiring_surge') flair = 'Hiring Surge';\n\n    results.push({ json: {\n      title,\n      description: snippet,\n      source: platform,\n      source_url: link,\n      source_id: id,\n      posted_at: (() => { try { const d = r.date ? new Date(r.date) : null; return (d && !isNaN(d)) ? d.toISOString() : new Date().toISOString(); } catch(e) { return new Date().toISOString(); } })(),\n      author: '',\n      subreddit: flair,\n      upvotes: 0,\n      num_comments: 0,\n      flair_text: flair,\n      budget_text,\n      signal,\n      platform\n    }});\n  }\n}\n\nif (results.length === 0) return [{ json: { _empty: true, platform: 'venture' } }];\n// Cap at 30 leads per run to avoid Gemini rate-limit timeouts\nreturn results.slice(0, 30);"
+      },
+      "id": "normalize-venture",
+      "name": "Normalize - Venture Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const post = $input.item.json;\nif (post._empty || post._noData) return { json: post };\n\nconst apiKey = $env.GOOGLE_AI_API_KEY;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, custom software, data pipelines.\n\nThese leads are venture funding signals and engineering hiring surge signals. The core logic:\n- Company raised $2M-$50M → needs to build fast → high probability outsourcing candidate\n- Company posting 3+ engineering roles but small team → can't hire fast enough → outsourcing opportunity\n- Recently funded AI/SaaS startup → needs custom ML/AI/automation built → perfect ScaleBuild fit\n\n\nHARD EXCLUSIONS — Score overall_score 0.0 immediately, do not process:\n- Lead is from India or an Indian company (location: India, .in domain, Indian city/company name context) → 0.0\n- Lead is requesting to build a SaaS subscription product (we do NOT build SaaS products) → 0.0  \n- Budget is clearly under $10,000 OR budget_score would be below 0.3 → 0.0\n- Individual freelancer or [For Hire] ad → 0.0\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 1.0=AI/ML/automation startup just funded | 0.8=SaaS/software startup with dev needs | 0.6=tech-adjacent startup | 0.3=non-tech | 0.0=no fit\n2. budget_score (based on funding amount):\n   - $50M+ raised → 1.0 | $20-50M → 0.9 | $10-20M → 0.8 | $5-10M → 0.7 | $2-5M → 0.6 | $500K-2M → 0.5 | unknown/hiring signal → 0.5\n3. urgency_score: 1.0=announced this week/month | 0.8=within 3 months of funding | 0.6=6 months post-funding | 0.5=hiring surge now | 0.3=older signal | 0.1=no urgency\n4. win_probability: 0.9=small team + funded + AI focus | 0.8=funded + engineering hiring | 0.7=funded + tech needs | 0.5=medium fit | 0.3=large company/already staffed | 0.1=no fit\n\nKEY SIGNALS TO LOOK FOR:\n- Team size <10 engineers + $2M+ raised = VERY HIGH priority\n- 3+ engineering job postings open = outsourcing signal\n- \"building AI\" / \"automating\" / \"data pipeline\" mentioned = perfect fit\n- Founder/CTO posting about hiring difficulty = outsourcing signal\n\nBUDGET ESTIMATION (ALWAYS fill estimated_budget_text, never null. Base on funding raised):\n- Raised $20M-$50M → \"$50K-$300K (post-Series A build budget)\"\n- Raised $5M-$20M → \"$25K-$150K (seed/Series A scope)\"\n- Raised $1M-$5M → \"$15K-$75K (seed stage scope)\"\n- Hiring surge (no funding data) → \"$20K-$100K (engineering outsource)\"\n- Unknown → \"$15K-$80K (estimated startup scope)\"\n\nCOMPANY EXTRACTION: Extract company name, founder name, website from snippet/URL. Never invent.`;\n\nconst prompt = SYSTEM_PROMPT + `\n\nScore this venture/hiring signal lead. Return ONLY a single valid JSON object:\n{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"3-5 sentence detailed summary: what the company does, funding amount/stage, team size signals, why ScaleBuild AI is the right fit\",\"industry\":\"FinTech/HealthTech/SaaS/AI/Manufacturing/eCommerce/General\",\"tags\":[\"tag1\",\"tag2\"],\"reasoning\":\"Full detailed reasoning: explain each score dimension — why this relevance, why this budget score (funding amount), why this urgency, why this win probability. What specific signals make this a strong or weak lead. Recommended outreach angle.\",\"estimated_budget_text\":\"$X-$Y (reason)\",\"funding_stage\":\"Seed/Series A/Series B/Unknown\",\"funding_amount\":\"$XM or unknown\",\"tech_stack\":[],\"company_name\":null,\"lead_founder_name\":null,\"lead_website\":null}\n\nTitle: ${post.title}\nPlatform: ${post.source}\nSignal Type: ${post.signal || 'funding'}\nFunding Stage: ${post.flair_text || 'Unknown'}\nDescription: ${(post.description||'').substring(0, 1200)}${post.budget_text ? '\\nFunding Amount Mentioned: ' + post.budget_text : ''}`;\n\nconst body = {\n  contents: [{ parts: [{ text: prompt }] }],\n  generationConfig: { maxOutputTokens: 100000, temperature: 0.2, responseMimeType: 'application/json' }\n};\n\nlet s = null;\ntry {\n  const respRaw = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n    body\n  });\n  const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n  const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (match) s = JSON.parse(match[0]);\n} catch(e) {}\n\nif (!s) s = {\n  relevance_score:0.4, budget_score:0.5, urgency_score:0.4, win_probability:0.4,\n  summary:'Parse error', industry:'General', tags:[], reasoning:'Could not parse Gemini response',\n  estimated_budget_text:'$15K-$75K (estimated)', funding_stage:'Unknown',\n  funding_amount:'unknown', tech_stack:[],\n  company_name:null, lead_founder_name:null, lead_website:null\n};\n\nconst overall = Math.round(((s.relevance_score*0.35)+(s.budget_score*0.30)+(s.urgency_score*0.15)+(s.win_probability*0.20))*100)/100;\nconst alert_tier = overall>=0.85?'instant':overall>=0.70?'digest':overall>=0.30?'dashboard':'discard';\n\nreturn { json: {\n  source_id: post.source_id, title: post.title, description: post.description,\n  source: post.source, source_url: post.source_url, posted_at: post.posted_at,\n  author: post.author||'', subreddit: post.flair_text||post.signal||'funding',\n  upvotes: 0, num_comments: 0, flair_text: post.flair_text||'Funding',\n  relevance_score: s.relevance_score, budget_score: s.budget_score,\n  urgency_score: s.urgency_score, win_probability: s.win_probability,\n  overall_score: overall, ai_summary: s.summary, industry: s.industry,\n  ai_tags: s.tags||[], ai_reasoning: s.reasoning,\n  estimated_budget_text: s.estimated_budget_text||'',\n  budget_mentioned: post.budget_text || s.funding_amount || s.estimated_budget_text || '',\n  tech_stack: s.tech_stack||[], company_name: s.company_name||null,\n  lead_founder: s.lead_founder_name||null, lead_company: s.company_name||null,\n  lead_website: s.lead_website||null, lead_contact: null,\n  lead_score: Math.round(overall*10),\n  alert_tier, discovered_at: new Date().toISOString(), status:'new',\n  location: s.location||null, deadline_text: null,\n  outreach_draft: '',\n  hunter_name:'', hunter_email:'', hunter_title:'', hunter_company:''\n}};"
+      },
+      "id": "gemini-venture",
+      "name": "Gemini - Score & Parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-score",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-lead-info",
+      "name": "Check - Has Lead Info",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-real-company",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.lead_website || $json.lead_company || $json.company_name || '' }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-company-signal",
+      "name": "Check - Has Company Signal",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.hunter.io/v2/domain-search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "={{ $json.lead_website ? 'domain' : 'company' }}",
+              "value": "={{ $json.lead_website ? ($json.lead_website).replace(/^https?:\\/\\/(www\\.)?/, '').split('/')[0] : ($json.lead_company||'') }}"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.HUNTER_API_KEY }}"
+            },
+            {
+              "name": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "hunter-venture",
+      "name": "Hunter - Enrich Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -160
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const hunterResp = $input.item.json;\nconst original = $('Check - Has Lead Info').item.json;\nconst data = hunterResp?.data || {};\nconst emails = data.emails || [];\nconst org = data.organization || original.lead_company || '';\n\nif (emails.length === 0) {\n  return [{ json: { ...original, hunter_name: '', hunter_email: '', hunter_title: '', hunter_company: org, hunter_all_emails: '', hunter_all_names: '', hunter_all_titles: '' } }];\n}\n\n// Pick best contact by seniority priority\nconst priority = ['ceo','founder','co-founder','cto','owner','president','vp','director'];\nconst best = emails.find(e => priority.some(t => (e.position||'').toLowerCase().includes(t))) || emails[0];\n\n// Collect all emails, names, titles as comma-separated\nconst allEmails  = emails.map(e => e.value || '').filter(Boolean).join(', ');\nconst allNames   = emails.map(e => (e.first_name||e.last_name) ? `${e.first_name||''} ${e.last_name||''}`.trim() : '').filter(Boolean).join(', ');\nconst allTitles  = emails.map(e => e.position || '').filter(Boolean).join(', ');\n\nreturn [{ json: {\n  ...original,\n  hunter_name:       best.first_name || best.last_name ? `${best.first_name||''} ${best.last_name||''}`.trim() : '',\n  hunter_email:      best.value || '',\n  hunter_title:      best.position || '',\n  hunter_company:    org,\n  hunter_all_emails: allEmails,\n  hunter_all_names:  allNames,\n  hunter_all_titles: allTitles\n}}];"
+      },
+      "id": "parse-hunter-venture",
+      "name": "Parse Hunter Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-email-exists",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.hunter_email }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-hunter-email",
+      "name": "Check - Hunter Has Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, enrichment_source: 'hunter-miss' } }));"
+      },
+      "id": "flag-hunter-miss",
+      "name": "Flag - Hunter Miss",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return [{ json: { ...$input.item.json, hunter_name:'', hunter_email:'', hunter_title:'', hunter_company:'' }}];"
+      },
+      "id": "set-empty-hunter",
+      "name": "Set Empty Hunter Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const seen = new Map();\nfor (const item of $input.all()) {\n  const id = item.json.source_id;\n  if (!id) continue;\n  if (!seen.has(id)) {\n    seen.set(id, item.json);\n  } else {\n    if (item.json.hunter_email && !seen.get(id).hunter_email) {\n      seen.set(id, item.json);\n    }\n  }\n}\nreturn [...seen.values()]\n  .sort((a, b) => (b.overall_score||0) - (a.overall_score||0))\n  .map(json => ({ json }));"
+      },
+      "id": "dedup-venture",
+      "name": "Dedup by Source ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "score-check",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0.8
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-venture",
+      "name": "Filter - Score >= 0.80",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Opportunities"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Source ID": "={{ $json.source_id }}",
+            "Title": "={{ $json.title }}",
+            "Subreddit": "={{ $json.subreddit }}",
+            "Source URL": "={{ $json.source_url }}",
+            "Posted At": "={{ $json.posted_at }}",
+            "Discovered At": "={{ $json.discovered_at }}",
+            "Author": "={{ $json.author }}",
+            "Overall Score": "={{ $json.overall_score }}",
+            "Relevance Score": "={{ $json.relevance_score }}",
+            "Budget Score": "={{ $json.budget_score }}",
+            "Urgency Score": "={{ $json.urgency_score }}",
+            "Win Probability": "={{ $json.win_probability }}",
+            "Alert Tier": "={{ $json.alert_tier }}",
+            "Industry": "={{ $json.industry }}",
+            "AI Summary": "={{ $json.ai_summary }}",
+            "AI Tags": "={{ ($json.ai_tags||[]).join(', ') }}",
+            "Tech Stack": "={{ ($json.tech_stack||[]).join(', ') }}",
+            "Budget Mentioned": "={{ $json.budget_mentioned }}",
+            "Location": "={{ $json.location }}",
+            "Upvotes": "={{ $json.upvotes }}",
+            "Comments": "={{ $json.num_comments }}",
+            "Status": "new",
+            "AI Reasoning": "={{ $json.ai_reasoning }}",
+            "Lead Founder": "={{ $json.lead_founder||'' }}",
+            "Lead Company": "={{ $json.lead_company||'' }}",
+            "Lead Website": "={{ $json.lead_website||'' }}",
+            "Lead Contact": "={{ $json.lead_contact||'' }}",
+            "Lead Score": "={{ $json.lead_score||'' }}",
+            "Hunter Name": "={{ $json.hunter_name||'' }}",
+            "Hunter Email": "={{ $json.hunter_email||'' }}",
+            "Hunter Title": "={{ $json.hunter_title||'' }}",
+            "Hunter Company": "={{ $json.hunter_company||'' }}"
+          },
+          "matchingColumns": [
+            "Source ID"
+          ],
+          "schema": [
+            {
+              "id": "Source ID",
+              "displayName": "Source ID",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheet-venture",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1920,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HopOeXjaGgSku8RO",
+          "name": "Google Sheets account"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron - Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Build Venture Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Venture Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Venture Queries": {
+      "main": [
+        [
+          {
+            "node": "SerpAPI - Venture Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI - Venture Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize - Venture Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize - Venture Results": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Score & Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Score & Parse": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Lead Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Lead Info": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Company Signal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Empty Hunter Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Company Signal": {
+      "main": [
+        [
+          {
+            "node": "Hunter - Enrich Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag - Hunter Miss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hunter - Enrich Lead": {
+      "main": [
+        [
+          {
+            "node": "Parse Hunter Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Hunter Response": {
+      "main": [
+        [
+          {
+            "node": "Check - Hunter Has Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Hunter Has Email": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag - Hunter Miss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag - Hunter Miss": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Empty Hunter Fields": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup by Source ID": {
+      "main": [
+        [
+          {
+            "node": "Filter - Score >= 0.55",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter - Score >= 0.55": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "venture-signals-v1",
+  "meta": {
+    "instanceId": "bfa881661c018749d441660d36f63fdf552d02437db15de1ed54bb7a572d9e36"
+  },
+  "id": "dealhunter-venture",
+  "tags": []
+}

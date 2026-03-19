@@ -1,0 +1,625 @@
+{
+  "name": "DealHunter - Startup & Founder Communities",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "cron-startup",
+      "name": "Cron - Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1040,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-startup",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1040,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const queries = [\n  // === INDIE HACKERS — High Priority ===\n  { q: 'site:indiehackers.com \"looking for\" OR \"need help\" OR \"hire\" \"developer\" OR \"agency\" OR \"software\" OR \"AI\" OR \"automation\"', platform: 'indiehackers', priority: 'high' },\n  { q: 'site:indiehackers.com \"outsource\" OR \"dev shop\" OR \"dev agency\" OR \"development company\" \"build\" OR \"product\" OR \"SaaS\"', platform: 'indiehackers', priority: 'high' },\n  { q: 'site:indiehackers.com \"building\" OR \"built\" \"AI\" OR \"automation\" OR \"SaaS\" OR \"software\" \"need\" OR \"help\" OR \"anyone\"', platform: 'indiehackers', priority: 'high' },\n  { q: 'site:indiehackers.com \"raise\" OR \"raised\" OR \"funded\" \"AI\" OR \"software\" OR \"automation\" \"build\" OR \"team\" OR \"hire\" 2025', platform: 'indiehackers', priority: 'high' },\n\n  // === PRODUCT HUNT DISCUSSIONS — Medium Priority ===\n  { q: 'site:producthunt.com/discussions \"build\" OR \"hire\" OR \"looking for\" \"developer\" OR \"agency\" OR \"AI\" OR \"automation\"', platform: 'producthunt', priority: 'medium' },\n  { q: 'site:producthunt.com/discussions \"software\" OR \"SaaS\" OR \"automation\" \"need\" OR \"want\" OR \"help\" OR \"recommend\"', platform: 'producthunt', priority: 'medium' },\n  { q: 'site:producthunt.com/discussions \"AI\" OR \"machine learning\" OR \"LLM\" \"build\" OR \"integrate\" OR \"implement\" \"startup\" OR \"company\"', platform: 'producthunt', priority: 'medium' },\n\n  // === BETALIST — Medium Priority ===\n  { q: 'site:betalist.com \"AI\" OR \"automation\" OR \"SaaS\" OR \"machine learning\" \"startup\" OR \"launch\" OR \"build\"', platform: 'betalist', priority: 'medium' },\n  { q: 'site:betalist.com \"software\" OR \"platform\" OR \"tool\" \"enterprise\" OR \"business\" OR \"workflow\" 2025', platform: 'betalist', priority: 'medium' },\n\n  // === WELLFOUND / ANGELLIST — Medium Priority ===\n  { q: 'site:wellfound.com/jobs \"contract\" OR \"freelance\" \"AI\" OR \"machine learning\" OR \"automation\" OR \"software engineer\"', platform: 'wellfound', priority: 'medium' },\n  { q: 'site:wellfound.com/company \"AI\" OR \"automation\" OR \"SaaS\" \"seed\" OR \"series a\" \"hiring\" OR \"contract\" 2025', platform: 'wellfound', priority: 'medium' },\n  { q: 'site:wellfound.com \"AI development\" OR \"ML engineer\" OR \"automation engineer\" \"contract\" OR \"part-time\" OR \"consulting\"', platform: 'wellfound', priority: 'medium' },\n\n  // === F6S — Low Priority ===\n  { q: 'site:f6s.com \"AI\" OR \"machine learning\" OR \"automation\" OR \"software development\" startup 2025', platform: 'f6s', priority: 'low' },\n  { q: 'site:f6s.com \"looking for\" OR \"need\" \"developer\" OR \"agency\" OR \"tech partner\" OR \"co-founder\"', platform: 'f6s', priority: 'low' },\n\n  // === MICROCONF — Low Priority ===\n  { q: 'site:microconf.com \"build\" OR \"hire\" OR \"agency\" OR \"developer\" \"SaaS\" OR \"software\" OR \"automation\"', platform: 'microconf', priority: 'low' },\n  { q: '\"microconf\" \"looking for\" OR \"hire\" OR \"outsource\" \"developer\" OR \"AI\" OR \"software\" site:community.microconf.com OR site:microconf.com', platform: 'microconf', priority: 'low' },\n\n  // === HACKERNOON — Low Priority ===\n  { q: 'site:hackernoon.com \"AI\" OR \"automation\" OR \"SaaS\" \"build\" OR \"startup\" OR \"founder\" \"2025\"', platform: 'hackernoon', priority: 'low' },\n  { q: 'site:hackernoon.com \"machine learning\" OR \"computer vision\" OR \"data pipeline\" \"company\" OR \"startup\" OR \"product\" 2025', platform: 'hackernoon', priority: 'low' }\n];\nreturn queries.map(q => ({ json: q }));"
+      },
+      "id": "build-queries-startup",
+      "name": "Build Startup Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "num",
+              "value": "10"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.SERPAPI_KEY }}"
+            },
+            {
+              "name": "engine",
+              "value": "google"
+            },
+            {
+              "name": "gl",
+              "value": "us"
+            },
+            {
+              "name": "hl",
+              "value": "en"
+            },
+            {
+              "name": "tbs",
+              "value": "qdr:m"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "serpapi-startup",
+      "name": "SerpAPI - Startup Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -560,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const skipKeywords = [\n  'for hire', 'i am available', 'available for work', 'hire me',\n  'my portfolio', 'i offer services', 'i specialize in', 'i will build',\n  'seeking employment', 'looking for work', 'open to opportunities',\n  'logo design', 'seo services', 'social media manager', 'content writer',\n  'virtual assistant', 'data entry', 'graphic designer', 'video editor',\n  'job listing', 'full-time position', 'apply now'\n];\n\nconst platformMap = {\n  'indiehackers.com': 'indiehackers',\n  'producthunt.com': 'producthunt',\n  'betalist.com': 'betalist',\n  'wellfound.com': 'wellfound',\n  'angel.co': 'wellfound',\n  'f6s.com': 'f6s',\n  'microconf.com': 'microconf',\n  'hackernoon.com': 'hackernoon'\n};\n\nconst priorityMap = {\n  'indiehackers': 'high',\n  'producthunt': 'medium',\n  'betalist': 'medium',\n  'wellfound': 'medium',\n  'f6s': 'low',\n  'microconf': 'low',\n  'hackernoon': 'low'\n};\n\nconst budgetPatterns = [\n  /([\\$€£][\\d,]+(?:,\\d{3})*(?:k)?(?:\\s[-–]\\s*[\\$€£]?[\\d,]+(?:k)?)?(?:\\s*(?:USD|EUR|GBP))?)/i,\n  /(\\d+[kK]\\s*[-–]\\s*\\d+[kK])/,\n  /budget[:\\s]+([\\$€£][\\d,k.]+[\\s\\w-]*)/i\n];\n\nconst results = [];\nconst seenInRun = new Set();\n\nfor (const item of $input.all()) {\n  const data = item.json;\n  if (!data || data.error) continue;\n\n  const searchQ = data.search_parameters?.q || '';\n  const organicResults = data.organic_results || [];\n\n  // Detect platform from query\n  let platform = 'unknown';\n  for (const [domain, pname] of Object.entries(platformMap)) {\n    if (searchQ.includes(domain) || searchQ.includes(pname)) { platform = pname; break; }\n  }\n\n  for (const r of organicResults) {\n    const link = r.link || '';\n    if (!link) continue;\n\n    // Detect platform from actual URL\n    let actualPlatform = platform;\n    if (actualPlatform === 'unknown') {\n      for (const [domain, pname] of Object.entries(platformMap)) {\n        if (link.includes(domain)) { actualPlatform = pname; break; }\n      }\n    }\n    if (actualPlatform === 'unknown') continue;\n\n    // Skip Wellfound company-directory and profile pages (not job listings)\n    if (actualPlatform === 'wellfound' && !link.includes('/jobs') && !link.includes('/company') && !link.includes('/l/')) continue;\n\n    const id = actualPlatform + '_' + link.replace(/[^a-z0-9]/gi, '').slice(-70);\n    if (seenInRun.has(id)) continue;\n    seenInRun.add(id);\n\n    const title   = String(r.title   || '').substring(0, 500);\n    const snippet = String(r.snippet || '').replace(/<[^>]*>/g, '').substring(0, 3000);\n    if (!title) continue;\n\n    const fullText = (title + ' ' + snippet).toLowerCase();\n    if (skipKeywords.some(kw => fullText.includes(kw))) continue;\n\n    // Extract budget\n    let budget_text = '';\n    for (const pat of budgetPatterns) {\n      const m = (snippet + ' ' + title).match(pat);\n      if (m) { budget_text = (m[1] || m[0]).trim().substring(0, 80); break; }\n    }\n\n    results.push({ json: {\n      title,\n      description: snippet,\n      source: actualPlatform,\n      source_url: link,\n      source_id: id,\n      posted_at: (() => { try { const d = r.date ? new Date(r.date) : null; return (d && !isNaN(d)) ? d.toISOString() : new Date().toISOString(); } catch(e) { return new Date().toISOString(); } })(),\n      author: '',\n      subreddit: actualPlatform,\n      upvotes: 0,\n      num_comments: 0,\n      flair_text: priorityMap[actualPlatform] || 'low',\n      budget_text,\n      platform: actualPlatform\n    }});\n  }\n}\n\nif (results.length === 0) return [{ json: { _empty: true, platform: 'startup-communities' } }];\n// Cap at 30 leads per run\nreturn results.slice(0, 30);"
+      },
+      "id": "normalize-startup",
+      "name": "Normalize - Startup Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const post = $input.item.json;\nif (post._empty || post._noData) return { json: post };\n\nconst apiKey = $env.GOOGLE_AI_API_KEY;\n\nconst SYSTEM_PROMPT = `You are a senior business development analyst for ScaleBuild AI (CEO: Ujjwal Roy, ex-Intel/IBM/Micron), a custom AI/ML software development company.\n\nScaleBuild BUILDS: AI/ML models, computer vision, enterprise automation, custom software, data pipelines.\n\nThese leads come from STARTUP & FOUNDER COMMUNITIES — Indie Hackers, Product Hunt, BetaList, Wellfound, F6S, MicroConf, HackerNoon. These are founders, indie hackers, and builders who may be actively seeking a dev partner, agency, or AI implementation help.\n\nPLATFORM CONTEXT:\n- Indie Hackers: Solo founders/bootstrappers building products. High signal if they mention needing dev help or AI.\n- Product Hunt: Early-stage product launchers. Good signal if discussing tech stack or build needs.\n- BetaList: Pre-launch startups. Good signal if AI/automation is core to their product.\n- Wellfound: Contract/freelance job postings from funded startups. HIGH signal — these are active hiring needs.\n- F6S: Startup applications and profiles. Medium signal.\n- MicroConf: Bootstrapped SaaS community. High relevance if asking for dev help.\n- HackerNoon: Tech articles. Lower signal unless describing a build need.\n\nIDEAL LEAD: A founder, CTO, or decision-maker actively seeking a dev partner, AI implementation, or building a product that needs custom software.\n\nHARD EXCLUSIONS — Score overall_score 0.0 immediately, do not process:\n- Lead is from India or an Indian company (location: India, .in domain, Indian city/company name context) → 0.0\n- Lead is requesting to build a SaaS subscription product (we do NOT build SaaS products) → 0.0  \n- Budget is clearly under $10,000 OR budget_score would be below 0.3 → 0.0\n- Individual freelancer or [For Hire] ad → 0.0\n\nSCORE 4 DIMENSIONS (0.0-1.0):\n1. relevance_score: 1.0=Wellfound contract job for AI/ML/automation | 0.9=founder explicitly seeking dev agency/partner | 0.8=building AI/SaaS product and needs tech help | 0.7=startup that raised and needs to build fast | 0.5=general startup content with AI context | 0.2=blog/article, no buyer signal | 0.0=irrelevant\n2. budget_score: 1.0=Wellfound contract with $50K+ scope | 0.8=funded startup ($1M+) | 0.7=bootstrapper with revenue | 0.6=pre-revenue but strong signals | 0.5=unknown, startup context | 0.3=solo hobbyist | 0.1=student project\n3. urgency_score: 1.0=active job posting/contract this week | 0.8=founder actively deciding, recent post | 0.6=product launching soon | 0.4=exploring options | 0.2=ideation stage | 0.1=archived/old\n4. win_probability: 0.9=contract posting explicitly for AI/ML agency | 0.8=founder asking for agency recommendation | 0.7=bootstrapper needing custom dev | 0.5=startup with ambiguous need | 0.3=likely wants solo freelancer | 0.1=no fit\n\nBUDGET ESTIMATION (ALWAYS fill estimated_budget_text, never null):\n- Wellfound contract posting → \"$15K-$100K (contract scope)\"\n- Funded startup (Seed/Series A) → \"$25K-$200K (startup build budget)\"\n- Bootstrapped with revenue → \"$10K-$75K (bootstrapper scope)\"\n- Pre-revenue idea stage → \"$5K-$30K (MVP scope)\"\n- Unknown startup context → \"$10K-$75K (estimated startup scope)\"\n\nCOMPANY EXTRACTION: Extract company name, founder name, website from snippet/URL/title. Never invent. Return null if not found.`;\n\nconst prompt = SYSTEM_PROMPT + `\\n\\nScore this startup community lead. Return ONLY a single valid JSON object:\\n{\"relevance_score\":0.0,\"budget_score\":0.0,\"urgency_score\":0.0,\"win_probability\":0.0,\"summary\":\"2-4 sentence summary: who this is, what they are building or seeking, and why ScaleBuild AI is or isn't a fit\",\"industry\":\"FinTech/HealthTech/SaaS/AI/Manufacturing/eCommerce/General\",\"tags\":[\"tag1\",\"tag2\"],\"reasoning\":\"Explain each score — why relevance (buyer or not?), why budget (what signals exist?), why urgency (how active?), why win probability (agency fit?). Recommend: pursue or skip, and the best outreach angle.\",\"estimated_budget_text\":\"$X-$Y (reason)\",\"tech_stack\":[],\"company_name\":null,\"lead_founder_name\":null,\"lead_website\":null}\\n\\nTitle: ${post.title}\\nPlatform: ${post.source}\\nPriority: ${post.flair_text}\\nDescription: ${(post.description||'').substring(0, 1200)}${post.budget_text ? '\\nBudget Signal: ' + post.budget_text : ''}`;\n\nconst body = {\n  contents: [{ parts: [{ text: prompt }] }],\n  generationConfig: { maxOutputTokens: 100000, temperature: 0.2, responseMimeType: 'application/json' }\n};\n\nlet s = null;\ntry {\n  const respRaw = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,\n    body\n  });\n  const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;\n  const raw = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  const cleaned = raw.replace(/```json[\\s\\S]*?```|```/g, '').trim();\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (match) s = JSON.parse(match[0]);\n} catch(e) {}\n\nif (!s) s = {\n  relevance_score:0.3, budget_score:0.4, urgency_score:0.3, win_probability:0.3,\n  summary:'Parse error - using defaults', industry:'General', tags:[], reasoning:'Could not parse Gemini response',\n  estimated_budget_text:'$10K-$75K (estimated startup scope)', tech_stack:[],\n  company_name:null, lead_founder_name:null, lead_website:null\n};\n\nconst overall = Math.round(((s.relevance_score*0.35)+(s.budget_score*0.30)+(s.urgency_score*0.15)+(s.win_probability*0.20))*100)/100;\nconst alert_tier = overall>=0.85?'instant':overall>=0.70?'digest':overall>=0.30?'dashboard':'discard';\n\nreturn { json: {\n  source_id: post.source_id, title: post.title, description: post.description,\n  source: post.source, source_url: post.source_url, posted_at: post.posted_at,\n  author: post.author||'', subreddit: post.subreddit||post.source||'',\n  upvotes: 0, num_comments: 0, flair_text: post.flair_text||'startup',\n  relevance_score: s.relevance_score, budget_score: s.budget_score,\n  urgency_score: s.urgency_score, win_probability: s.win_probability,\n  overall_score: overall, ai_summary: s.summary, industry: s.industry,\n  ai_tags: s.tags||[], ai_reasoning: s.reasoning,\n  estimated_budget_text: s.estimated_budget_text||'',\n  budget_mentioned: post.budget_text || s.estimated_budget_text || '',\n  tech_stack: s.tech_stack||[], company_name: s.company_name||null,\n  lead_founder: s.lead_founder_name||null, lead_company: s.company_name||null,\n  lead_website: s.lead_website||null, lead_contact: null,\n  lead_score: Math.round(overall*10),\n  alert_tier, discovered_at: new Date().toISOString(), status:'new',\n  location: s.location||null, deadline_text: null,\n  outreach_draft: '',\n  hunter_name:'', hunter_email:'', hunter_title:'', hunter_company:'',\n  hunter_all_emails:'', hunter_all_names:'', hunter_all_titles:''\n}};"
+      },
+      "id": "gemini-startup",
+      "name": "Gemini - Score & Parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-score",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-lead-info-startup",
+      "name": "Check - Has Lead Info",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-real-company",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.lead_website || $json.lead_company || $json.company_name || '' }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-company-signal-startup",
+      "name": "Check - Has Company Signal",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.hunter.io/v2/domain-search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "={{ $json.lead_website ? 'domain' : 'company' }}",
+              "value": "={{ $json.lead_website ? ($json.lead_website).replace(/^https?:\\/\\/(www\\.)?/, '').split('/')[0] : ($json.lead_company||'') }}"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.HUNTER_API_KEY }}"
+            },
+            {
+              "name": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "hunter-startup",
+      "name": "Hunter - Enrich Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -160
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const hunterResp = $input.item.json;\nconst original = $('Check - Has Lead Info').item.json;\nconst data = hunterResp?.data || {};\nconst emails = data.emails || [];\nconst org = data.organization || original.lead_company || '';\n\nif (emails.length === 0) {\n  return [{ json: { ...original, hunter_name: '', hunter_email: '', hunter_title: '', hunter_company: org, hunter_all_emails: '', hunter_all_names: '', hunter_all_titles: '' } }];\n}\n\nconst priority = ['ceo','founder','co-founder','cto','owner','president','vp','director'];\nconst best = emails.find(e => priority.some(t => (e.position||'').toLowerCase().includes(t))) || emails[0];\n\nconst allEmails  = emails.map(e => e.value || '').filter(Boolean).join(', ');\nconst allNames   = emails.map(e => (e.first_name||e.last_name) ? `${e.first_name||''} ${e.last_name||''}`.trim() : '').filter(Boolean).join(', ');\nconst allTitles  = emails.map(e => e.position || '').filter(Boolean).join(', ');\n\nreturn [{ json: {\n  ...original,\n  hunter_name:       best.first_name || best.last_name ? `${best.first_name||''} ${best.last_name||''}`.trim() : '',\n  hunter_email:      best.value || '',\n  hunter_title:      best.position || '',\n  hunter_company:    org,\n  hunter_all_emails: allEmails,\n  hunter_all_names:  allNames,\n  hunter_all_titles: allTitles\n}}];"
+      },
+      "id": "parse-hunter-startup",
+      "name": "Parse Hunter Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, enrichment_source: 'hunter-miss' } }));"
+      },
+      "id": "flag-hunter-miss-startup",
+      "name": "Flag - Hunter Miss",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-email-exists",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.hunter_email }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-hunter-email-startup",
+      "name": "Check - Hunter Has Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return [{ json: { ...$input.item.json, hunter_name:'', hunter_email:'', hunter_title:'', hunter_company:'', hunter_all_emails:'', hunter_all_names:'', hunter_all_titles:'' }}];"
+      },
+      "id": "set-empty-hunter-startup",
+      "name": "Set Empty Hunter Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const seen = new Map();\nfor (const item of $input.all()) {\n  const id = item.json.source_id;\n  if (!id) continue;\n  if (!seen.has(id)) {\n    seen.set(id, item.json);\n  } else {\n    if (item.json.hunter_email && !seen.get(id).hunter_email) {\n      seen.set(id, item.json);\n    }\n  }\n}\nreturn [...seen.values()]\n  .sort((a, b) => (b.overall_score||0) - (a.overall_score||0))\n  .map(json => ({ json }));"
+      },
+      "id": "dedup-startup",
+      "name": "Dedup by Source ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "score-check",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 0.8
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-startup",
+      "name": "Filter - Score >= 0.80",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Opportunities"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Source ID": "={{ $json.source_id }}",
+            "Title": "={{ $json.title }}",
+            "Subreddit": "={{ $json.subreddit }}",
+            "Source URL": "={{ $json.source_url }}",
+            "Posted At": "={{ $json.posted_at }}",
+            "Discovered At": "={{ $json.discovered_at }}",
+            "Author": "={{ $json.author }}",
+            "Overall Score": "={{ $json.overall_score }}",
+            "Relevance Score": "={{ $json.relevance_score }}",
+            "Budget Score": "={{ $json.budget_score }}",
+            "Urgency Score": "={{ $json.urgency_score }}",
+            "Win Probability": "={{ $json.win_probability }}",
+            "Alert Tier": "={{ $json.alert_tier }}",
+            "Industry": "={{ $json.industry }}",
+            "AI Summary": "={{ $json.ai_summary }}",
+            "AI Tags": "={{ ($json.ai_tags||[]).join(', ') }}",
+            "Tech Stack": "={{ ($json.tech_stack||[]).join(', ') }}",
+            "Budget Mentioned": "={{ $json.budget_mentioned }}",
+            "Location": "={{ $json.location }}",
+            "Upvotes": "={{ $json.upvotes }}",
+            "Comments": "={{ $json.num_comments }}",
+            "Status": "new",
+            "AI Reasoning": "={{ $json.ai_reasoning }}",
+            "Lead Founder": "={{ $json.lead_founder||'' }}",
+            "Lead Company": "={{ $json.lead_company||'' }}",
+            "Lead Website": "={{ $json.lead_website||'' }}",
+            "Lead Contact": "={{ $json.lead_contact||'' }}",
+            "Lead Score": "={{ $json.lead_score||'' }}",
+            "Hunter Name": "={{ $json.hunter_name||'' }}",
+            "Hunter Email": "={{ $json.hunter_email||'' }}",
+            "Hunter Title": "={{ $json.hunter_title||'' }}",
+            "Hunter Company": "={{ $json.hunter_company||'' }}"
+          },
+          "matchingColumns": [
+            "Source ID"
+          ],
+          "schema": [
+            {
+              "id": "Source ID",
+              "displayName": "Source ID",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheet-startup",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1920,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HopOeXjaGgSku8RO",
+          "name": "Google Sheets account"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron - Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Build Startup Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Startup Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Startup Queries": {
+      "main": [
+        [
+          {
+            "node": "SerpAPI - Startup Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI - Startup Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize - Startup Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize - Startup Results": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Score & Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Score & Parse": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Lead Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Lead Info": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Company Signal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Empty Hunter Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Company Signal": {
+      "main": [
+        [
+          {
+            "node": "Hunter - Enrich Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag - Hunter Miss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hunter - Enrich Lead": {
+      "main": [
+        [
+          {
+            "node": "Parse Hunter Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Hunter Response": {
+      "main": [
+        [
+          {
+            "node": "Check - Hunter Has Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Hunter Has Email": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag - Hunter Miss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag - Hunter Miss": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Empty Hunter Fields": {
+      "main": [
+        [
+          {
+            "node": "Dedup by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup by Source ID": {
+      "main": [
+        [
+          {
+            "node": "Filter - Score >= 0.35",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter - Score >= 0.35": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "startup-communities-v1",
+  "meta": {
+    "instanceId": "bfa881661c018749d441660d36f63fdf552d02437db15de1ed54bb7a572d9e36"
+  },
+  "id": "dealhunter-startup-communities",
+  "tags": []
+}

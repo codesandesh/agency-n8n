@@ -1,0 +1,973 @@
+{
+  "name": "DealHunter - Alert & Outreach Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "cron-alert-trigger",
+      "name": "Cron - Every 2 Hours (Alerts)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Opportunities"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "Status",
+              "condition": "eq",
+              "keyValue": "new"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "read-sheet-new-leads",
+      "name": "Read Sheet - New Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -1360,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HopOeXjaGgSku8RO",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "loop-items",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3040,
+        160
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise(r => setTimeout(r, 2000));\nreturn $input.all();"
+      },
+      "id": "wait-loop",
+      "name": "Wait - Process Rate Limit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3280,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.item.json;\nconst budgetScore = parseFloat(d['Budget Score']) || 0;\nconst location = (d['Location'] || '').toLowerCase();\nconst industry = (d['Industry'] || '').toLowerCase();\nconst subreddit = (d['Subreddit'] || '').toLowerCase();\nconst title = (d['Title'] || '').toLowerCase();\nconst summary = (d['AI Summary'] || '').toLowerCase();\n\n// Block India / Pakistan / Bangladesh based freelancers\nconst isOffshoreFreelancer = location.includes('india') || location.includes('pakistan') || location.includes('bangladesh') || location.includes('sri lanka');\n\n// Block low-budget SaaS (SaaS + budget score below 0.50)\nconst isLowBudgetSaaS = (industry.includes('saas') || title.includes('saas') || summary.includes('saas')) && budgetScore < 0.50;\n\n// Block cheap freelance subreddits with low budget\nconst isCheapFreelance = ['slavelabour', 'forhire', 'indianfreelancers'].includes(subreddit) && budgetScore < 0.50;\n\nif (isOffshoreFreelancer || isLowBudgetSaaS || isCheapFreelance) {\n  return [];\n}\nreturn [$input.item];"
+      },
+      "id": "filter-qualify-lead",
+      "name": "Filter - Qualify Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3400,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "alert-check",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json[\"Overall Score\"] }}",
+              "rightValue": 0.5
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-alert",
+      "name": "Check - Score >= 0.50 (Instant Alert)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3520,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + $env.GOOGLE_AI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  \"contents\": [{\"parts\": [{\"text\": `You are writing as Ujjwal Roy, CEO of ScaleBuild AI (Junkiri Labs LLC).\n\nLEAD:\nTitle: ${$json[\"Title\"] || $json.title || \"\"}\nSummary: ${$json[\"AI Summary\"] || $json.ai_summary || \"\"}\nIndustry: ${$json[\"Industry\"] || $json.industry || \"\"}\nTech Stack: ${$json[\"Tech Stack\"] || ($json.tech_stack||[]).join(', ') || \"Not specified\"}\nBudget: ${$json[\"Budget Mentioned\"] || $json.estimated_budget_text || \"Not mentioned\"}\nSource: r/${$json[\"Subreddit\"] || $json.subreddit || \"HackerNews\"}\n\nRULES:\n- Write a Reddit DM as Ujjwal Roy, CEO of ScaleBuild AI\n- Tone: casual, human, conversational \u2014 like one founder messaging another\n- Max 100 words, no fluff\n- Start by referencing their specific pain point\n- Briefly mention ScaleBuild AI helps with AI/automation (Intel/IBM/Micron background)\n- End with a soft CTA\n- NO em dashes, NO exclamation marks\n- End with:\n\nRegards,\nUjjwal\nScaleBuild AI\n\nReturn ONLY the message text. No markdown.`}]}],\n  \"generationConfig\": {\"maxOutputTokens\": 6000, \"temperature\": 0.6}\n}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "gemini-outreach",
+      "name": "Gemini - Generate Outreach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3760,
+        0
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const geminiResp = $input.item.json;\nconst d = $('Check - Score >= 0.50 (Instant Alert)').item.json;\nconst draft = geminiResp.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'Outreach generation failed';\nconst author = d['Author'] || 'unknown';\nconst sourceUrl = d['Source URL'] || '';\nlet domain = '';\ntry { domain = new URL(sourceUrl).hostname.replace('www.', ''); } catch(e) {}\nconst subreddit = d['Subreddit'] || '';\nconst sourceLine = subreddit ? ('r/' + subreddit + (domain ? '  ·  ' + domain : '')) : domain;\nconst lines = [\n  'Lead Alert',\n  'Score ' + d['Overall Score'],\n  d['Industry'] || '',\n  d['Title'] || '',\n  '',\n  sourceLine,\n  '',\n  'Relevance        ' + (d['Relevance Score'] || ''),\n  'Budget fit       ' + (d['Budget Score'] || ''),\n  'Win probability  ' + (d['Win Probability'] || ''),\n  '',\n  'Summary',\n  (d['AI Summary'] || '').substring(0, 400),\n  '',\n  'Budget',\n  d['Budget Mentioned'] || 'Unknown',\n  '',\n  'Author',\n  'u/' + author,\n  '',\n  'Contact',\n  (d['Hunter Name'] || d['Lead Founder'] || 'N/A') + ' @ ' + (d['Hunter Company'] || d['Lead Company'] || 'N/A'),\n  '',\n  'Email',\n  d['Hunter Email'] || d['Lead Contact'] || 'Not found',\n  '',\n  'Outreach Draft',\n  '',\n  draft,\n  '',\n  'View project',\n  sourceUrl\n];\nconst whatsapp_message = lines.join('\\n');\nreturn [{ json: { ...d, outreach_draft: draft, whatsapp_message } }];"
+      },
+      "id": "parse-outreach",
+      "name": "Parse Outreach Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://graph.facebook.com/v22.0/' + $env.WHATSAPP_PHONE_NUMBER_ID + '/messages' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $env.WHATSAPP_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: '9779861054716', type: 'text', text: { body: $json.whatsapp_message } }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "whatsapp-instant",
+      "name": "WhatsApp - Instant Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4240,
+        -80
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "fromEmail": "deshpane834@gmail.com",
+        "toEmail": "deshpane834@gmail.com",
+        "subject": "=Lead Alert [{{ $('Parse Outreach Draft').item.json['Overall Score'] }}] - {{ $('Parse Outreach Draft').item.json['Title'].substring(0,60) }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "email-instant",
+      "name": "Email - Instant Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        4240,
+        80
+      ],
+      "webhookId": "2760fafa-5075-44ec-8c6c-dfe465b1b6b0",
+      "credentials": {
+        "smtp": {
+          "id": "FNx0wyiO1TAuFQu3",
+          "name": "SMTP account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Opportunities"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Source ID": "={{ $json.source_id || $json['Source ID'] }}",
+            "Outreach Draft": "={{ $json.outreach_draft }}",
+            "Status": "outreach_ready"
+          },
+          "matchingColumns": [
+            "Source ID"
+          ],
+          "schema": [
+            {
+              "id": "Source ID",
+              "displayName": "Source ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Subreddit",
+              "displayName": "Subreddit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Source URL",
+              "displayName": "Source URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Posted At",
+              "displayName": "Posted At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Discovered At",
+              "displayName": "Discovered At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Author",
+              "displayName": "Author",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Overall Score",
+              "displayName": "Overall Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Relevance Score",
+              "displayName": "Relevance Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Budget Score",
+              "displayName": "Budget Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Urgency Score",
+              "displayName": "Urgency Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Win Probability",
+              "displayName": "Win Probability",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Alert Tier",
+              "displayName": "Alert Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Industry",
+              "displayName": "Industry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Tags",
+              "displayName": "AI Tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Tech Stack",
+              "displayName": "Tech Stack",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Budget Mentioned",
+              "displayName": "Budget Mentioned",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Upvotes",
+              "displayName": "Upvotes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Comments",
+              "displayName": "Comments",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Reasoning",
+              "displayName": "AI Reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Outreach Draft",
+              "displayName": "Outreach Draft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Lead Founder",
+              "displayName": "Lead Founder",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lead Company",
+              "displayName": "Lead Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lead Website",
+              "displayName": "Lead Website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lead Contact",
+              "displayName": "Lead Contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lead Score",
+              "displayName": "Lead Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hunter Name",
+              "displayName": "Hunter Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hunter Email",
+              "displayName": "Hunter Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hunter Title",
+              "displayName": "Hunter Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hunter Company",
+              "displayName": "Hunter Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "update-sheet-outreach",
+      "name": "Update Sheet - Add Outreach Draft",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        4240,
+        240
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HopOeXjaGgSku8RO",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://graph.facebook.com/v22.0/' + $env.WHATSAPP_PHONE_NUMBER_ID + '/messages' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $env.WHATSAPP_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: '9779861054716', type: 'text', text: { body: ['Lead Alert', 'Score ' + $json['Overall Score'], $json['Industry'] || '', $json['Title'] || '', '', ($json['Subreddit'] ? 'r/' + $json['Subreddit'] : ''), '', 'Relevance        ' + ($json['Relevance Score'] || ''), 'Budget fit       ' + ($json['Budget Score'] || ''), 'Win probability  ' + ($json['Win Probability'] || ''), '', 'Summary', ($json['AI Summary'] || '').substring(0, 300), '', 'View project', $json['Source URL'] || ''].join('\\n') } }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "whatsapp-digest",
+      "name": "WhatsApp - Digest Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3760,
+        320
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 13 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-cron",
+      "name": "Cron - Daily Digest 8AM ET",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1600,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1dPe3iitwzXQnVh0hPrGW8uIB3Xnf0Gzu2sx2-mflDkQ/edit"
+        }
+      },
+      "id": "fetch-digest-leads",
+      "name": "Fetch Last 24h Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -1360,
+        480
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HopOeXjaGgSku8RO",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst now = new Date();\nconst yesterday = new Date(now.getTime() - 24*60*60*1000);\nconst leads = items.filter(item => {\n  const discovered = new Date(item.json['Discovered At'] || 0);\n  const score = parseFloat(item.json['Overall Score']) || 0;\n  return discovered >= yesterday && score >= 0.70;\n}).sort((a,b) => (parseFloat(b.json['Overall Score'])||0) - (parseFloat(a.json['Overall Score'])||0)).slice(0,15);\n\nif (leads.length === 0) return [{ json: { count: 0, emailBody: '<p>No leads scored >= 0.70 in last 24h.</p>', hasLeads: false } }];\n\nconst rows = leads.map((item,idx) => {\n  const d = item.json;\n  const score = parseFloat(d['Overall Score'])||0;\n  return `<tr><td>${idx+1}</td><td><a href=\"${d['Source URL']}\">${d['Title']}</a></td><td>r/${d['Subreddit']||''}</td><td><strong>${score.toFixed(2)}</strong></td><td>${(d['AI Summary']||'').substring(0,120)}...</td></tr>`;\n}).join('');\n\nconst emailBody = `<h2>DealHunter Daily Digest</h2><p><strong>${leads.length} leads</strong> scored \u2265 0.70 in last 24h</p><table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%\"><tr><th>#</th><th>Title</th><th>Source</th><th>Score</th><th>Summary</th></tr>${rows}</table><p><em>Generated ${now.toISOString()}</em></p>`;\n\nconst byTier = {hot:0,medium:0,low:0};\nleads.forEach(item => {\n  const s = parseFloat(item.json['Overall Score'])||0;\n  if(s>=0.85)byTier.hot++; else if(s>=0.60)byTier.medium++; else byTier.low++;\n});\nconst slackSummary = `DealHunter Daily Report\\n\\n${leads.length} leads scored >= 0.70 in last 24h\\nHot: ${byTier.hot}  Medium: ${byTier.medium}  Low: ${byTier.low}\\nFull report sent to email`;\n\nreturn [{ json: { count: leads.length, emailBody, hasLeads: true, slackSummary } }];"
+      },
+      "id": "build-digest",
+      "name": "Build Daily Digest Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has-leads",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "leftValue": "={{ $json.hasLeads }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-digest-leads",
+      "name": "Check - Has Leads Today",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -880,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "deshpane834@gmail.com",
+        "toEmail": "deshpane834@gmail.com",
+        "subject": "=DealHunter Daily Digest - {{ $json.count }} New Leads",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "send-digest",
+      "name": "Send Daily Digest Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -640,
+        480
+      ],
+      "webhookId": "950530c0-974a-47e2-8281-dfd68972a851",
+      "credentials": {
+        "smtp": {
+          "id": "FNx0wyiO1TAuFQu3",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://graph.facebook.com/v22.0/' + $env.WHATSAPP_PHONE_NUMBER_ID + '/messages' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $env.WHATSAPP_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: '9779861054716', type: 'text', text: { body: $json.slackSummary } }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "whatsapp-daily-summary",
+      "name": "WhatsApp - Daily Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        480
+      ],
+      "continueOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron - Every 2 Hours (Alerts)": {
+      "main": [
+        [
+          {
+            "node": "Read Sheet - New Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Sheet - New Leads": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Wait - Process Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait - Process Rate Limit": {
+      "main": [
+        [
+          {
+            "node": "Filter - Qualify Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter - Qualify Lead": {
+      "main": [
+        [
+          {
+            "node": "Check - Score >= 0.50 (Instant Alert)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Score >= 0.50 (Instant Alert)": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Generate Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "WhatsApp - Digest Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Generate Outreach": {
+      "main": [
+        [
+          {
+            "node": "Parse Outreach Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Outreach Draft": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp - Instant Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email - Instant Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Sheet - Add Outreach Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp - Instant Alert": {
+      "main": [
+        []
+      ]
+    },
+    "Email - Instant Alert": {
+      "main": [
+        []
+      ]
+    },
+    "Update Sheet - Add Outreach Draft": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp - Digest Notification": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron - Daily Digest 8AM ET": {
+      "main": [
+        [
+          {
+            "node": "Fetch Last 24h Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Last 24h Leads": {
+      "main": [
+        [
+          {
+            "node": "Build Daily Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Daily Digest Email": {
+      "main": [
+        [
+          {
+            "node": "Check - Has Leads Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - Has Leads Today": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Daily Digest Email": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp - Daily Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "dealhunter-alert-outreach-engine",
+  "tags": []
+}
