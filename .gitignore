@@ -1,5 +1,9 @@
-.env
+﻿.env
 node_modules/
 *.log
 .DS_Store
 backup.json
+postgres-data/
+redis-data/
+n8n/
+logs/
