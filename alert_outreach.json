@@ -834,13 +834,7 @@
             "index": 0
           }
         ],
-        [
-          {
-            "node": "WhatsApp - Digest Notification",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Gemini - Generate Outreach": {
@@ -909,13 +903,7 @@
     },
     "Cron - Daily Digest 8AM ET": {
       "main": [
-        [
-          {
-            "node": "Fetch Last 24h Leads",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Fetch Last 24h Leads": {
